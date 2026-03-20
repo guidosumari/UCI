@@ -152,7 +152,6 @@ const SafetyPanel: React.FC = () => {
               : 'text-slate-600 hover:bg-slate-100'
               }`}
           >
-            <span className={`material-symbols-outlined text-[22px] ${activeTab === 'monitoring' ? 'filled' : ''}`}>grid_view</span>
             <span className={`text-sm font-bold ${activeTab === 'monitoring' ? '' : 'group-hover:text-slate-900'}`}>Panel Principal</span>
           </button>
 
@@ -163,7 +162,6 @@ const SafetyPanel: React.FC = () => {
               : 'text-slate-600 hover:bg-slate-100'
               }`}
           >
-            <span className={`material-symbols-outlined text-[22px] ${activeTab === 'history' ? 'filled' : ''}`}>id_card</span>
             <span className={`text-sm font-bold ${activeTab === 'history' ? '' : 'group-hover:text-slate-900'}`}>Historia Clínica</span>
           </button>
 
@@ -174,7 +172,6 @@ const SafetyPanel: React.FC = () => {
               : 'text-slate-600 hover:bg-slate-100'
               }`}
           >
-            <span className={`material-symbols-outlined text-[22px] ${activeTab === 'evolution' ? 'filled' : ''}`}>history_edu</span>
             <span className={`text-sm font-bold ${activeTab === 'evolution' ? '' : 'group-hover:text-slate-900'}`}>Notas de Evolución</span>
           </button>
 
@@ -182,7 +179,6 @@ const SafetyPanel: React.FC = () => {
             onClick={() => navigate(`/handoff/${id}`)}
             className="flex items-center gap-4 px-4 py-3.5 rounded-xl w-full text-left transition-all duration-200 group text-slate-600 hover:bg-slate-100"
           >
-            <span className="material-symbols-outlined text-[22px] text-amber-500">diversity_3</span>
             <span className="text-sm font-bold group-hover:text-slate-900">Reporte de Guardia</span>
           </button>
         </nav>
