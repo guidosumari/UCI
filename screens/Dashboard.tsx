@@ -166,7 +166,7 @@ const Dashboard: React.FC = () => {
             onClick={() => navigate('/interconsultas')}
             className="hidden md:flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-indigo-700 transition shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-0.5"
           >
-            <span className="material-symbols-outlined text-lg">assignment_add</span>
+            <span className="material-symbols-outlined text-lg"></span>
             Interconsultas
             {waitingList.length > 0 && (
               <span className="bg-white text-indigo-600 text-[10px] h-5 min-w-[20px] px-1 flex items-center justify-center rounded-full font-black">
