@@ -60,32 +60,33 @@ const InterconsultasScreen: React.FC = () => {
     return (
         <div className="min-h-screen bg-slate-50 relative font-sans">
             {/* Header similar to Dashboard */}
-            <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-3 shadow-sm">
+            <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 md:px-6 py-3 shadow-sm">
                 <div className="max-w-[1600px] mx-auto flex items-center justify-between">
-                    <div className="flex items-center gap-4 cursor-pointer" onClick={() => navigate('/')}>
-                        <div className="flex items-center justify-center size-10 rounded-xl bg-indigo-600 shadow-sm text-white">
-                            <span className="material-symbols-outlined text-2xl filled">assignment</span>
+                    <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
+                        <div className="flex items-center justify-center size-10 rounded-xl bg-indigo-600 shadow-sm text-white shrink-0">
+                            <span className="material-symbols-outlined text-xl md:text-2xl filled">arrow_back</span>
                         </div>
                         <div>
-                            <h1 className="text-xl font-extrabold leading-tight tracking-tight text-slate-900">Interconsultas</h1>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                            <h1 className="text-lg md:text-xl font-extrabold leading-tight tracking-tight text-slate-900">Interconsultas</h1>
+                            <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-wider hidden sm:block">
                                 Gestión de ingresos y procedimientos
                             </p>
                         </div>
                     </div>
                     <button
                         onClick={() => setShowModal(true)}
-                        className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition flex items-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                        className="bg-indigo-600 text-white px-3 md:px-5 py-2 md:py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition flex items-center gap-1.5 md:gap-2 shadow-lg hover:shadow-xl hover:-translate-y-0.5 shrink-0"
                     >
-                        <span className="material-symbols-outlined">add</span>
-                        Nueva Interconsulta
+                        <span className="material-symbols-outlined text-[20px] md:text-[24px]">add</span>
+                        <span className="hidden sm:inline">Nueva Interconsulta</span>
+                        <span className="sm:hidden text-sm uppercase tracking-wide">Nueva</span>
                     </button>
                 </div>
             </header>
 
-            <main className="max-w-[1600px] mx-auto p-6">
-                {/* Waiting List Table */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <main className="max-w-[1600px] mx-auto p-4 md:p-6">
+                {/* Waiting List Table (Desktop) */}
+                <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
@@ -178,6 +179,76 @@ const InterconsultasScreen: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
+                </div>
+
+                {/* Mobile Cards View */}
+                <div className="md:hidden flex flex-col gap-4 mt-2">
+                    {loading ? (
+                        <div className="text-center p-8 text-slate-500 font-bold animate-pulse">Cargando lista de espera...</div>
+                    ) : interconsultations.length === 0 ? (
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center flex flex-col items-center justify-center text-slate-400">
+                            <span className="material-symbols-outlined text-4xl mb-2">assignment_add</span>
+                            <p className="font-medium text-sm">No hay pacientes en espera</p>
+                        </div>
+                    ) : (
+                        interconsultations.map((ic) => (
+                            <div key={ic.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col gap-3 relative overflow-hidden">
+                                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${ic.priority === '1' ? 'bg-red-500' : ic.priority === '2' ? 'bg-amber-500' : 'bg-indigo-400'}`}></div>
+                                
+                                <div className="flex justify-between items-start pl-2">
+                                    <div>
+                                        <div className="font-black text-slate-900 leading-tight text-lg">{ic.patient_name}</div>
+                                        <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-0.5">
+                                            HC: {ic.hc || '----'} • {ic.age}a • {ic.sex === 'M' ? 'Masc' : 'Fem'}
+                                        </div>
+                                    </div>
+                                    <span className={`text-[9px] font-black uppercase px-2 py-1 rounded border ${ic.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-green-50 text-green-600 border-green-100'} shrink-0 ml-2`}>
+                                        {ic.status === 'pending' ? 'Pendiente' : 'Admitido'}
+                                    </span>
+                                </div>
+                                
+                                <div className="flex flex-wrap items-center gap-2 pl-2">
+                                    {ic.priority && (
+                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wide
+                                            ${ic.priority === '1' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                                ic.priority === '2' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                    'bg-indigo-50 text-indigo-600 border border-indigo-100'}`}>
+                                            {ic.priority === '1' && <span className="relative flex h-1.5 w-1.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span></span>}
+                                            Prio {ic.priority}
+                                        </span>
+                                    )}
+                                    <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 uppercase">
+                                        <span className="material-symbols-outlined text-[12px] align-middle mr-1">meeting_room</span>
+                                        {ic.service_origin} (C-{ic.bed_number})
+                                    </span>
+                                </div>
+
+                                <div className="flex flex-col gap-1.5 mt-1 pl-2">
+                                    {ic.health_problem_1 && (
+                                        <div className="text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-100 px-2.5 py-1.5 rounded-lg flex items-start gap-1.5 leading-tight">
+                                            <span className="size-1.5 rounded-full bg-indigo-500 mt-1 shrink-0"></span>
+                                            {ic.health_problem_1}
+                                        </div>
+                                    )}
+                                    {ic.health_problem_2 && (
+                                        <div className="text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-100 px-2.5 py-1.5 rounded-lg flex items-start gap-1.5 leading-tight">
+                                            <span className="size-1.5 rounded-full bg-slate-400 mt-1 shrink-0"></span>
+                                            {ic.health_problem_2}
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                <div className="mt-2 pt-3 border-t border-slate-100 flex justify-between items-center pl-2">
+                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-[14px]">info</span> Motivo
+                                     </span>
+                                     <span className="text-[10px] font-black text-indigo-700 uppercase bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100 shadow-sm shadow-indigo-100">
+                                         {ic.reason?.replace('_', ' ')}
+                                     </span>
+                                </div>
+                            </div>
+                        ))
+                    )}
                 </div>
             </main>
 
