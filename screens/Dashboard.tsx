@@ -143,41 +143,49 @@ const Dashboard: React.FC = () => {
   return (
     <div className="bg-background-light min-h-screen flex flex-col relative font-sans">
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-3 shadow-sm">
-        <div className="max-w-[1600px] mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center justify-center size-10 rounded-xl bg-primary shadow-sm text-white">
-              <span className="material-symbols-outlined text-2xl filled">vital_signs</span>
+        <div className="max-w-[1600px] mx-auto flex flex-wrap lg:flex-nowrap items-center justify-between gap-4 lg:gap-0">
+          <div className="flex items-center justify-between w-full lg:w-auto">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center justify-center size-10 rounded-xl bg-primary shadow-sm text-white">
+                <span className="material-symbols-outlined text-2xl filled">vital_signs</span>
+              </div>
+              <div>
+                <h1 className="text-xl font-extrabold leading-tight tracking-tight text-slate-900">UCI Unidad 4</h1>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1">
+                  <span className={`size-1.5 rounded-full ${filter === 'history' ? 'bg-slate-400' : 'bg-emerald-500 animate-pulse'}`}></span>
+                  {filter === 'history' ? 'Modo: Historial' : 'Sincronizado: En vivo'}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-extrabold leading-tight tracking-tight text-slate-900">UCI Unidad 4</h1>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1">
-                <span className={`size-1.5 rounded-full ${filter === 'history' ? 'bg-slate-400' : 'bg-emerald-500 animate-pulse'}`}></span>
-                {filter === 'history' ? 'Modo: Historial' : 'Sincronizado: En vivo'}
-              </p>
+            {/* Mobile User Profile */}
+            <div className="flex lg:hidden items-center gap-3">
+              <div className="size-10 rounded-full ring-2 ring-primary/20 p-0.5 cursor-pointer">
+                <img src="https://picsum.photos/id/177/200/200" className="size-full rounded-full object-cover" alt="Perfil" />
+              </div>
             </div>
           </div>
 
-          <div className="hidden lg:flex flex-1 max-w-xl mx-8 items-center gap-3 bg-slate-50 px-4 py-2 rounded-full border border-slate-200">
-            <span className="material-symbols-outlined text-slate-400 text-lg">search</span>
-            <input type="text" placeholder="Buscar paciente, cama o enfermero..." className="bg-transparent border-none focus:ring-0 text-sm w-full placeholder:text-slate-400" />
+          <div className="flex flex-col sm:flex-row flex-1 w-full lg:w-auto order-3 lg:order-none max-w-none lg:max-w-xl mx-0 lg:mx-8 items-stretch lg:items-center gap-3">
+            <div className="flex flex-1 items-center gap-3 bg-slate-50 px-4 py-2 rounded-full border border-slate-200">
+              <span className="material-symbols-outlined text-slate-400 text-lg">search</span>
+              <input type="text" placeholder="Buscar paciente, cama o enfermero..." className="bg-transparent border-none focus:ring-0 text-sm w-full placeholder:text-slate-400" />
+            </div>
+
+            <button
+              onClick={() => navigate('/interconsultas')}
+              className="flex justify-center items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-indigo-700 transition shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-0.5 whitespace-nowrap"
+            >
+              <span className="material-symbols-outlined text-lg"></span>
+              Interconsultas
+              {waitingList.length > 0 && (
+                <span className="bg-white text-indigo-600 text-[10px] h-5 min-w-[20px] px-1 flex items-center justify-center rounded-full font-black">
+                  {waitingList.length}
+                </span>
+              )}
+            </button>
           </div>
 
-          <button
-            onClick={() => navigate('/interconsultas')}
-            className="hidden md:flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-indigo-700 transition shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-0.5"
-          >
-            <span className="material-symbols-outlined text-lg"></span>
-            Interconsultas
-            {waitingList.length > 0 && (
-              <span className="bg-white text-indigo-600 text-[10px] h-5 min-w-[20px] px-1 flex items-center justify-center rounded-full font-black">
-                {waitingList.length}
-              </span>
-            )}
-          </button>
-
-
-
-          <div className="flex items-center gap-3 pl-4 border-l border-slate-200 ml-2">
+          <div className="hidden lg:flex items-center gap-3 pl-4 border-l border-slate-200 ml-2 order-2 lg:order-none">
             <div className="text-right hidden sm:block">
               <p className="text-sm font-bold text-slate-900">Dra. Sarah C.</p>
               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Residente Jefe</p>
