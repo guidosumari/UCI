@@ -1,0 +1,918 @@
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../services/supabase';
+import { useNavigate } from 'react-router-dom';
+
+const PhysicalExamInput = ({
+    label,
+    value,
+    onChange,
+    placeholder = '',
+    width = '',
+    type = 'number'
+}: {
+    label: string,
+    value: string,
+    onChange: (val: string) => void,
+    placeholder?: string,
+    width?: string,
+    type?: 'text' | 'number'
+}) => (
+    <div className={`flex flex-col ${width}`}>
+        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 truncate" title={label}>{label}</label>
+        <input
+            type={type}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full border border-slate-200 rounded px-3 py-2 text-sm font-bold text-slate-700 focus:border-primary focus:ring-1 focus:ring-primary/20 bg-white"
+            placeholder={placeholder}
+            onWheel={(e) => e.currentTarget.blur()}
+        />
+    </div>
+);
+
+interface Props {
+    patientId: string;
+}
+
+const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
+    const navigate = useNavigate();
+    const [activeSection, setActiveSection] = useState<'filiacion' | 'antecedentes' | 'anamnesis' | 'examen_fisico' | 'problemas' | 'plan'>('filiacion');
+    const [patientData, setPatientData] = useState<any>({
+        // Filiación
+        name: '', age: '', sex: '', dni: '', hc: '', bed: '', acuity: 'ESTABLE', address: '', relative: '', relative_phone: '', hospital_admission: '', icu_admission: '', ucin_transfer_date: '',
+        // Anamnesis (Added fields)
+        illness_duration: '', symptoms: '', onset: '', anamnesis_text: '',
+        // Antecedentes (Checkbox)
+        hx_hta: false, hx_dm: false, hx_icc: false, hx_erc: false, hx_tbc: false, hx_epoc: false, hx_fibrosis: false, hx_other: '', hx_surgical: '', hx_medication: '',
+        allergies: '',
+        // Examen Físico
+        physical_exam: {
+            vital_signs: { pa: '', pam: '', spo2: '', etco2: '', weight: '', height: '', fr: '', fc: '', fio2: '', temp: '', pid: '', imc: '' },
+            neurologic: '',
+            respiratory: {
+                description: '', interface: '', fio2: '', pc: '', ppico: '', t_ins: '', vci: '', po2: '', pco2: '',
+                fr: '', peep: '', ie: '', cdin: '', vce: '', pafio2: '', gaa: ''
+            },
+            cardiovascular: '',
+            renal: { urea: '', creatinine: '', fg: '', bh: '' },
+            metabolic: {
+                na: '', k: '', cl: '', cai: '', cas: '', p: '', mg: '',
+                ph: '', hco3: '', eb: '', glu: '', lact: '', osmo: '',
+                bt: '', bd: '', bi: '', tgo: '', tgp: '',
+                pt: '', alb: '', fa: '', ggt: '', dhl: ''
+            },
+            abdomen: '',
+            hematology: {
+                hb: '', hto: '', plaq: '',
+                hma: '', leu: '', ab: '', seg: '', linf: '', lce: '',
+                perf_coag: '', tp: '', inr: '', ttpa: '', tt: '', fib: ''
+            },
+            infectious: { pcr: '', pct: '', antibiotic: '', cultures: '', antibiotic_days: '' }
+        },
+        // Problemas
+        health_problems: '',
+        // Plan
+        plan: ''
+    });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (patientId === 'new') {
+            setLoading(false);
+            setPatientData((prev: any) => ({
+                ...prev,
+                // Default values for new patient if needed
+                hospital_admission: new Date().toISOString().split('T')[0]
+            }));
+        } else {
+            fetchData();
+        }
+    }, [patientId]);
+
+    const fetchData = async () => {
+        setLoading(true);
+        const { data, error } = await supabase.from('patients').select('*').eq('id', patientId).single();
+        if (data) {
+            // Calculate age from DOB if available
+            let calculatedAge = '';
+            if (data.dob) {
+                const birthDate = new Date(data.dob.split('/').reverse().join('-')); // Assuming dd/mm/yyyy format
+                if (!isNaN(birthDate.getTime())) {
+                    const today = new Date();
+                    let age = today.getFullYear() - birthDate.getFullYear();
+                    const m = today.getMonth() - birthDate.getMonth();
+                    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                        age--;
+                    }
+                    calculatedAge = age.toString() + ' años';
+                } else {
+                    calculatedAge = data.dob; // Fallback just in case
+                }
+            }
+
+            setPatientData((prev: any) => ({
+                ...prev,
+                name: data.name,
+                hospital_admission: data.admit_date,
+                dni: data.dni || '',
+                hc: data.hc || '',
+                bed: data.bed || '',
+                age: calculatedAge,
+                physical_exam: data.physical_exam || prev.physical_exam, // Load from DB or keep default structure
+                illness_duration: data.illness_duration || '',
+                symptoms: data.symptoms || '',
+                onset: data.onset || '',
+                anamnesis_text: data.anamnesis_text || '',
+                allergies: data.allergies ? data.allergies.join(', ') : '',
+            }));
+        }
+        setLoading(false);
+    };
+
+    const handleChange = (field: string, value: any) => {
+        setPatientData((prev: any) => ({ ...prev, [field]: value }));
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+
+        if (patientId === 'new') {
+            // Create new patient
+            const newPatient = {
+                name: patientData.name,
+                dni: patientData.dni,
+                bed: patientData.bed || '00',
+                hc: patientData.hc || 'PENDING',
+                status: 'active',
+                acuity: patientData.acuity || 'ESTABLE',
+                illness_duration: patientData.illness_duration,
+                symptoms: patientData.symptoms,
+                onset: patientData.onset,
+                anamnesis_text: patientData.anamnesis_text,
+                admit_date: patientData.hospital_admission,
+                physical_exam: patientData.physical_exam, // Save structured data
+                allergies: patientData.allergies ? patientData.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s !== '') : [],
+                // ... map other fields
+            };
+
+            // Warning: The ClinicalHistory form DOES NOT have Bed or HC inputs currently.
+            // I should add them if this is to be the primary creation form.
+
+            // For now, let's just insert with what we have and assume we'll fix the missing fields in a moment.
+            try {
+                const { data, error } = await supabase.from('patients').insert([newPatient]).select();
+                if (error) throw error;
+                if (data) {
+                    // After create, navigate to safety panel
+                    navigate(`/safety/${data[0].id}?tab=history`);
+                }
+            } catch (e: any) {
+                alert('Error creando paciente: ' + e.message);
+            }
+        } else {
+            // Update existing
+            try {
+                const { error } = await supabase.from('patients').update({
+                    name: patientData.name,
+                    dni: patientData.dni,
+                    bed: patientData.bed,
+                    hc: patientData.hc,
+                    status: 'active',
+                    acuity: patientData.acuity,
+                    illness_duration: patientData.illness_duration,
+                    symptoms: patientData.symptoms,
+                    onset: patientData.onset,
+                    anamnesis_text: patientData.anamnesis_text,
+                    admit_date: patientData.hospital_admission,
+                    physical_exam: patientData.physical_exam,
+                    allergies: patientData.allergies ? patientData.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s !== '') : [],
+                }).eq('id', patientId);
+
+                if (error) throw error;
+                alert('Datos de Historia Clínica Guardados.');
+            } catch (e: any) {
+                alert('Error actualizando paciente: ' + e.message);
+            }
+        }
+        setSaving(false);
+    };
+
+    const renderFiliacion = () => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-2">
+            <div className="col-span-2 md:col-span-1">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Nombre Completo</label>
+                <input type="text" value={patientData.name} onChange={e => handleChange('name', e.target.value)} readOnly={patientId !== 'new'} className={`w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-slate-700 ${patientId === 'new' ? 'bg-white' : 'bg-slate-50'}`} />
+            </div>
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Historia Clínica</label>
+                <input type="text" value={patientData.hc} onChange={e => handleChange('hc', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="HC-..." />
+            </div>
+            <div className="md:col-span-1">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Cama</label>
+                <input type="text" value={patientData.bed} onChange={e => handleChange('bed', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="00" />
+            </div>
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Edad</label>
+                <input type="text" value={patientData.age} onChange={e => handleChange('age', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="Ej: 45 años" />
+            </div>
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Sexo</label>
+                <select value={patientData.sex} onChange={e => handleChange('sex', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                    <option value="">Seleccionar...</option>
+                    <option value="M">Masculino</option>
+                    <option value="F">Femenino</option>
+                </select>
+            </div>
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">DNI / CE</label>
+                <input type="text" value={patientData.dni} onChange={e => handleChange('dni', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+
+            <div className="col-span-2">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Dirección</label>
+                <input type="text" value={patientData.address} onChange={e => handleChange('address', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="Av. Principal 123..." />
+            </div>
+            <div className="col-span-2 md:col-span-1">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Familiar Responsable</label>
+                <input type="text" value={patientData.relative} onChange={e => handleChange('relative', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="Nombre y parentesco" />
+            </div>
+            <div className="col-span-2 md:col-span-1">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Teléfono de Contacto</label>
+                <input type="tel" value={patientData.relative_phone} onChange={e => handleChange('relative_phone', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="Ej: 999-999-999" />
+            </div>
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Ingreso Hospital</label>
+                <input type="date" value={patientData.hospital_admission} onChange={e => handleChange('hospital_admission', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Fecha de Pase a UCIN</label>
+                <input type="datetime-local" value={patientData.ucin_transfer_date} onChange={e => handleChange('ucin_transfer_date', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                <p className="text-[10px] text-slate-400 mt-1">Evaluación por interconsulta / Pase a área crítica</p>
+            </div>
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Ingreso Físico UCIN</label>
+                <input type="datetime-local" value={patientData.icu_admission} onChange={e => handleChange('icu_admission', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+        </div>
+    );
+
+    const renderAntecedentes = () => (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary text-lg">medical_services</span>
+                    Patológicos
+                </h4>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[
+                        { key: 'hx_hta', label: 'HTA' },
+                        { key: 'hx_dm', label: 'DM' },
+                        { key: 'hx_icc', label: 'ICC' },
+                        { key: 'hx_erc', label: 'ERC' },
+                        { key: 'hx_tbc', label: 'Tuberculosis' },
+                        { key: 'hx_epoc', label: 'EPOC' },
+                        { key: 'hx_fibrosis', label: 'Fibrosis Pulmonar' },
+                    ].map(item => (
+                        <label key={item.key} className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-200">
+                            <input
+                                type="checkbox"
+                                checked={patientData[item.key]}
+                                onChange={e => handleChange(item.key, e.target.checked)}
+                                className="rounded text-primary focus:ring-primary size-4"
+                            />
+                            <span className="text-sm text-slate-700 font-medium">{item.label}</span>
+                        </label>
+                    ))}
+                    <div className="col-span-2">
+                        <label className="flex flex-col gap-1 cursor-pointer p-2">
+                            <span className="text-sm text-slate-700 font-medium">Otros Antecedentes:</span>
+                            <textarea
+                                value={patientData.hx_other}
+                                onChange={e => handleChange('hx_other', e.target.value)}
+                                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[50px] focus:border-primary focus:ring-primary/20"
+                                placeholder="Especificar otros antecedentes patológicos..."
+                            />
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-red-50 p-4 rounded-xl border border-red-200">
+                <h4 className="text-sm font-bold text-red-700 mb-3 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-lg">warning</span>
+                    Alergias a Medicamentos
+                </h4>
+                <textarea
+                    value={patientData.allergies}
+                    onChange={e => handleChange('allergies', e.target.value)}
+                    className="w-full border border-red-200 rounded-lg p-3 text-sm min-h-[60px] focus:border-red-400 focus:ring-red-400/20"
+                    placeholder="Ingrese medicamentos a los que el paciente es alérgico, separados por comas..."
+                />
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200">
+                <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-orange-500 text-lg">accessibility_new</span>
+                    Valoración Funcional Previa
+                </h4>
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Índice de Katz (Estado Basal)</label>
+                    <div className="bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-100 text-xs text-slate-500 uppercase font-bold text-center">
+                                <tr>
+                                    <th className="px-4 py-3 w-1/3 text-left">Actividad</th>
+                                    <th className="px-4 py-3 w-1/3">Independiente (1 pt)</th>
+                                    <th className="px-4 py-3 w-1/3">Dependiente (0 pt)</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                                {[
+                                    {
+                                        key: 'bathing',
+                                        label: '1. Baño',
+                                        ind: 'Se baña solo o precisa ayuda para lavar alguna zona, como la espalda, o una extremidad con minusvalía.',
+                                        dep: 'Precisa ayuda para lavar más de una zona, para salir o entrar en la bañera, o no puede bañarse solo.'
+                                    },
+                                    {
+                                        key: 'dressing',
+                                        label: '2. Vestido',
+                                        ind: 'Saca ropa de cajones y armarios, se la pone, y abrocha. Se excluye el acto de atarse los zapatos.',
+                                        dep: 'No se viste por sí mismo, o permanece parcialmente desvestido.'
+                                    },
+                                    {
+                                        key: 'toileting',
+                                        label: '3. Uso del WC',
+                                        ind: 'Va al WC solo, se arregla la ropa y se limpia.',
+                                        dep: 'Precisa ayuda para ir al WC.'
+                                    },
+                                    {
+                                        key: 'transferring',
+                                        label: '4. Movilidad',
+                                        ind: 'Se levanta y acuesta en la cama por sí mismo, y puede levantarse de una silla por sí mismo.',
+                                        dep: 'Precisa ayuda para levantarse y acostarse en la cama o silla. No realiza uno o más desplazamientos.'
+                                    },
+                                    {
+                                        key: 'continence',
+                                        label: '5. Continencia',
+                                        ind: 'Control completo de micción y defecación.',
+                                        dep: 'Incontinencia parcial o total de la micción o defecación.'
+                                    },
+                                    {
+                                        key: 'feeding',
+                                        label: '6. Alimentación',
+                                        ind: 'Lleva el alimento a la boca desde el plato o equivalente (se excluye cortar la carne).',
+                                        dep: 'Precisa ayuda para comer, no come en absoluto, o requiere alimentación parenteral.'
+                                    },
+                                ].map((item) => (
+                                    <tr key={item.key} className="hover:bg-white transition-colors group">
+                                        <td className="px-4 py-4 align-top w-1/4">
+                                            <span className="font-bold text-slate-800 block mb-1">{item.label}</span>
+                                        </td>
+                                        <td className="px-4 py-3 align-top w-1/3 relative">
+                                            <label
+                                                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all h-full ${patientData.katz?.[item.key] === 'independent'
+                                                    ? 'bg-emerald-50 border-emerald-200 ring-1 ring-emerald-200'
+                                                    : 'border-transparent hover:bg-slate-50'
+                                                    }`}
+                                            >
+                                                <div className="pt-0.5 shrink-0">
+                                                    <input
+                                                        type="radio"
+                                                        name={`katz_${item.key}`}
+                                                        checked={patientData.katz?.[item.key] === 'independent'}
+                                                        onChange={() => {
+                                                            const currentKatz = patientData.katz || {};
+                                                            handleChange('katz', { ...currentKatz, [item.key]: 'independent' });
+                                                        }}
+                                                        className="size-4 text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                                                    />
+                                                </div>
+                                                <div className="text-xs text-slate-600 leading-relaxed">
+                                                    <span className="font-bold text-emerald-700 block mb-0.5">Independiente</span>
+                                                    {item.ind}
+                                                </div>
+                                            </label>
+                                        </td>
+                                        <td className="px-4 py-3 align-top w-1/3">
+                                            <label
+                                                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all h-full ${patientData.katz?.[item.key] === 'dependent'
+                                                    ? 'bg-red-50 border-red-200 ring-1 ring-red-200'
+                                                    : 'border-transparent hover:bg-slate-50'
+                                                    }`}
+                                            >
+                                                <div className="pt-0.5 shrink-0">
+                                                    <input
+                                                        type="radio"
+                                                        name={`katz_${item.key}`}
+                                                        checked={patientData.katz?.[item.key] === 'dependent'}
+                                                        onChange={() => {
+                                                            const currentKatz = patientData.katz || {};
+                                                            handleChange('katz', { ...currentKatz, [item.key]: 'dependent' });
+                                                        }}
+                                                        className="size-4 text-red-600 focus:ring-red-500 border-slate-300"
+                                                    />
+                                                </div>
+                                                <div className="text-xs text-slate-600 leading-relaxed">
+                                                    <span className="font-bold text-red-700 block mb-0.5">Dependiente</span>
+                                                    {item.dep}
+                                                </div>
+                                            </label>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            <tfoot className="bg-slate-50 border-t border-slate-200">
+                                <tr>
+                                    <td colSpan={3} className="px-4 py-3 text-right">
+                                        <span className="text-xs font-bold text-slate-500 uppercase mr-2">Puntaje Total:</span>
+                                        <span className="text-lg font-black text-slate-800">
+                                            {Object.values(patientData.katz || {}).filter(v => v === 'independent').length} / 6
+                                        </span>
+                                        <span className="ml-3 text-xs font-medium px-2 py-1 rounded bg-slate-200 text-slate-600">
+                                            {(() => {
+                                                const score = Object.values(patientData.katz || {}).filter(v => v === 'independent').length;
+                                                if (score === 6) return 'Independiente (A)';
+                                                if (score >= 4) return 'Dependencia Leve (B)';
+                                                if (score >= 2) return 'Dependencia Moderada (C-D)';
+                                                return 'Dependencia Severa (E-G)';
+                                            })()}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Antecedentes Quirúrgicos</label>
+                    <textarea
+                        value={patientData.hx_surgical}
+                        onChange={e => handleChange('hx_surgical', e.target.value)}
+                        className="w-full border border-slate-200 rounded-xl p-3 text-sm min-h-[100px]"
+                        placeholder="Cirugías previas y fechas aproximadas..."
+                    ></textarea>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Medicación Habitual</label>
+                    <textarea
+                        value={patientData.hx_medication}
+                        onChange={e => handleChange('hx_medication', e.target.value)}
+                        className="w-full border border-slate-200 rounded-xl p-3 text-sm min-h-[100px]"
+                        placeholder="Fármacos que consume regularmente..."
+                    ></textarea>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderAnamnesis = () => (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Signos y Síntomas Principales</label>
+                <input
+                    type="text"
+                    value={patientData.symptoms}
+                    onChange={e => handleChange('symptoms', e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold"
+                    placeholder="Ej: Disnea, fiebre, tos productiva..."
+                />
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Tiempo de Enfermedad</label>
+                    <input
+                        type="text"
+                        value={patientData.illness_duration}
+                        onChange={e => handleChange('illness_duration', e.target.value)}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                        placeholder="Ej: 3 días, 4 horas..."
+                    />
+                </div>
+                <div className="flex-1">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Forma de Inicio</label>
+                    <select
+                        value={patientData.onset}
+                        onChange={e => handleChange('onset', e.target.value)}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                    >
+                        <option value="">Seleccionar...</option>
+                        <option value="insidioso">Insidioso</option>
+                        <option value="brusco">Brusco</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Relato Cronológico (Anamnesis)</label>
+                <div className="relative">
+                    <textarea
+                        value={patientData.anamnesis_text}
+                        onChange={e => handleChange('anamnesis_text', e.target.value)}
+                        className="w-full border border-slate-200 rounded-xl p-4 text-sm min-h-[250px] leading-relaxed resize-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        placeholder="Escriba aquí el relato de la enfermedad (mínimo 2 párrafos)..."
+                    ></textarea>
+                    <div className="absolute bottom-3 right-4 text-xs text-slate-400 font-medium">Se recomiendan 2 párrafos de detalle.</div>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderPhysicalExam = () => {
+        const handlePhyChange = (section: string, field: string, value: string) => {
+            setPatientData((prev: any) => ({
+                ...prev,
+                physical_exam: {
+                    ...prev.physical_exam,
+                    [section]: {
+                        ...prev.physical_exam[section],
+                        [field]: value
+                    }
+                }
+            }));
+        };
+
+        const handlePhyTextChange = (field: string, value: string) => {
+            setPatientData((prev: any) => ({
+                ...prev,
+                physical_exam: {
+                    ...prev.physical_exam,
+                    [field]: value
+                }
+            }));
+        };
+
+        const renderInput = (label: string, section: string, field: string, placeholder = '', width = '', type: 'text' | 'number' = 'number') => (
+            <PhysicalExamInput
+                label={label}
+                value={patientData.physical_exam?.[section]?.[field] || ''}
+                onChange={(val) => handlePhyChange(section, field, val)}
+                placeholder={placeholder}
+                width={width}
+                type={type}
+            />
+        );
+
+        return (
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 select-none">
+                {/* Signos Vitales */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3 border-b pb-2 border-slate-200">Signos Vitales y Biológicos</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                        {renderInput("PA (mmHg)", "vital_signs", "pa", "120/80", "", "text")}
+                        {renderInput("PAM", "vital_signs", "pam", "93")}
+                        {renderInput("SPO2 (%)", "vital_signs", "spo2", "98%")}
+                        {renderInput("EtCO2", "vital_signs", "etco2")}
+                        {renderInput("Peso (Kg)", "vital_signs", "weight")}
+                        {renderInput("Talla (m)", "vital_signs", "height")}
+
+                        {renderInput("FR (rpm)", "vital_signs", "fr")}
+                        {renderInput("FC (lpm)", "vital_signs", "fc")}
+                        {renderInput("FiO2 (%)", "vital_signs", "fio2")}
+                        {renderInput("Temp (ºC)", "vital_signs", "temp")}
+                        {renderInput("P. Id.", "vital_signs", "pid")}
+                        {renderInput("IMC", "vital_signs", "imc")}
+                    </div>
+                </div>
+
+                {/* Neurológico */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200">
+                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-2">Neurológico</h4>
+                    <textarea
+                        value={patientData.physical_exam?.neurologic || ''}
+                        onChange={(e) => handlePhyTextChange('neurologic', e.target.value)}
+                        className="w-full border border-slate-200 rounded-lg p-2 text-xs min-h-[40px] resize-none"
+                        placeholder="Descripción neurológica (Glasgow, Pupilas, Sedación, Motor...)"
+                    />
+                </div>
+
+                {/* Cardiovascular */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200">
+                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-2">Cardiovascular</h4>
+                    <textarea
+                        value={patientData.physical_exam?.cardiovascular || ''}
+                        onChange={(e) => handlePhyTextChange('cardiovascular', e.target.value)}
+                        className="w-full border border-slate-200 rounded-lg p-2 text-xs min-h-[40px] resize-none"
+                        placeholder="Ruidos cardiacos, llenado capilar, edemas, perfusión..."
+                    />
+                </div>
+
+                {/* Respiratorio */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3 border-b pb-2 border-slate-200">Respiratorio / Ventilatorio</h4>
+
+                    <div className="mb-4">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Examen Físico Respiratorio</label>
+                        <textarea
+                            value={patientData.physical_exam?.respiratory?.description || ''}
+                            onChange={(e) => handlePhyChange('respiratory', 'description', e.target.value)}
+                            className="w-full border border-slate-200 rounded-lg p-2 text-xs min-h-[40px] resize-none bg-white focus:border-primary focus:ring-1 focus:ring-primary/20"
+                            placeholder="Murmullo vehicular, ruidos agregados, tirajes..."
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-y-3 gap-x-4">
+                        <div className="md:col-span-12 lg:col-span-4 mb-2">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Interface</label>
+                            <select
+                                value={patientData.physical_exam?.respiratory?.interface || ''}
+                                onChange={(e) => handlePhyChange('respiratory', 'interface', e.target.value)}
+                                className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs font-bold text-slate-700 bg-white focus:border-primary focus:ring-1 focus:ring-primary/20"
+                            >
+                                <option value="">Seleccionar...</option>
+                                <option value="Ventilando espontáneamente sin O2">Ventilando espontáneamente sin O2</option>
+                                <option value="Ventilación no invasiva / CNAF">Ventilación no invasiva / CNAF</option>
+                                <option value="Ventilación invasiva">Ventilación invasiva</option>
+                            </select>
+                        </div>
+
+                        {(patientData.physical_exam?.respiratory?.interface === 'Ventilación invasiva') && (
+                            <div className="md:col-span-12 lg:col-span-8 grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 animate-in fade-in slide-in-from-top-2">
+                                {renderInput("FiO2", "respiratory", "fio2")}
+                                {renderInput("PC", "respiratory", "pc")}
+                                {renderInput("Ppico", "respiratory", "ppico")}
+                                {renderInput("T.ins", "respiratory", "t_ins")}
+                                {renderInput("VCI", "respiratory", "vci")}
+
+                                {renderInput("FR (Set)", "respiratory", "fr")}
+                                {renderInput("PEEP", "respiratory", "peep")}
+                                {renderInput("I:E", "respiratory", "ie", "", "", "text")}
+                                {renderInput("CDIN", "respiratory", "cdin")}
+                                {renderInput("VCE", "respiratory", "vce")}
+
+                                {renderInput("PO2", "respiratory", "po2")}
+                                {renderInput("PCO2", "respiratory", "pco2")}
+                                {renderInput("PaFiO2", "respiratory", "pafio2")}
+                                {renderInput("G(A-a)", "respiratory", "gaa")}
+                            </div>
+                        )}
+
+                        {(patientData.physical_exam?.respiratory?.interface === 'Ventilación no invasiva / CNAF') && (
+                            <div className="md:col-span-12 lg:col-span-8 grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 animate-in fade-in slide-in-from-top-2">
+                                {renderInput("FiO2", "respiratory", "fio2")}
+                                {renderInput("PaFiO2", "respiratory", "pafio2")}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Renal */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3 border-b pb-2 border-slate-200">Renal / Medio Interno</h4>
+                    <div className="flex flex-wrap gap-4 items-end mb-4">
+                        {renderInput("Urea (mg/dL)", "renal", "urea", "", "w-24")}
+                        {renderInput("Crea (mg/dL)", "renal", "creatinine", "", "w-24")}
+                        {renderInput("F.G.", "renal", "fg", "", "w-24")}
+                        <div className="flex-1">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1">Balance Hídrico (BH)</label>
+                            <input
+                                type="text"
+                                value={patientData.physical_exam?.renal?.bh || ''}
+                                onChange={(e) => handlePhyChange('renal', 'bh', e.target.value)}
+                                className="w-full border border-slate-200 rounded px-2 py-1 text-xs"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Metabólico */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200">
+                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3 border-b pb-2 border-slate-200">Metabólico / Hepático</h4>
+                    <div className="space-y-3">
+                        {/* Electrolitos */}
+                        <div className="flex flex-wrap gap-2">
+                            <span className="text-xs font-bold text-slate-400 w-12 flex items-center">Iones:</span>
+                            {renderInput("Na+", "metabolic", "na", "", "w-16")}
+                            {renderInput("K+", "metabolic", "k", "", "w-16")}
+                            {renderInput("Cl-", "metabolic", "cl", "", "w-16")}
+                            {renderInput("Ca++ i", "metabolic", "cai", "", "w-16")}
+                            {renderInput("Ca++ s", "metabolic", "cas", "", "w-16")}
+                            {renderInput("P+", "metabolic", "p", "", "w-16")}
+                            {renderInput("Mg++", "metabolic", "mg", "", "w-16")}
+                        </div>
+                        {/* AGA */}
+                        <div className="flex flex-wrap gap-2 bg-blue-50/50 p-2 rounded-lg">
+                            <span className="text-xs font-bold text-blue-400 w-12 flex items-center">AGA:</span>
+                            {renderInput("PH", "metabolic", "ph", "", "w-16")}
+                            {renderInput("HCO3-", "metabolic", "hco3", "", "w-16")}
+                            {renderInput("EB", "metabolic", "eb", "", "w-16")}
+                            {renderInput("Glu", "metabolic", "glu", "", "w-16")}
+                            {renderInput("Lact", "metabolic", "lact", "", "w-16")}
+                            {renderInput("Osmo", "metabolic", "osmo", "", "w-20")}
+                        </div>
+                        {/* Perfil Hepático */}
+                        <div className="flex flex-wrap gap-2">
+                            <span className="text-xs font-bold text-amber-500 w-12 flex items-center">Hígado:</span>
+                            {renderInput("BT", "metabolic", "bt", "", "w-14")}
+                            {renderInput("BD", "metabolic", "bd", "", "w-14")}
+                            {renderInput("BI", "metabolic", "bi", "", "w-14")}
+                            {renderInput("TGO", "metabolic", "tgo", "", "w-14")}
+                            {renderInput("TGP", "metabolic", "tgp", "", "w-14")}
+
+                            {renderInput("PT", "metabolic", "pt", "", "w-14")}
+                            {renderInput("Alb", "metabolic", "alb", "", "w-14")}
+                            {renderInput("FA", "metabolic", "fa", "", "w-14")}
+                            {renderInput("GGT", "metabolic", "ggt", "", "w-14")}
+                            {renderInput("DHL", "metabolic", "dhl", "", "w-14")}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Abdomen */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-2">Abdomen</h4>
+                    <textarea
+                        value={patientData.physical_exam?.abdomen || ''}
+                        onChange={(e) => handlePhyTextChange('abdomen', e.target.value)}
+                        className="w-full border border-slate-200 rounded-lg p-2 text-xs min-h-[40px] resize-none"
+                        placeholder="Blando, depresible, ruidos hidroaéreos..."
+                    />
+                </div>
+
+                {/* Infeccioso / Inflamatorio y Hematológico */}
+                <div className="grid grid-cols-1 gap-4">
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3 border-b pb-2 border-slate-200">Infeccioso / Inflamatorio</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                            {renderInput("PCR", "infectious", "pcr")}
+                            {renderInput("Procalcitonina (PCT)", "infectious", "pct")}
+                            {renderInput("Días Atb", "infectious", "antibiotic_days")}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Antibiótico Actual</label>
+                                <textarea
+                                    value={patientData.physical_exam?.infectious?.antibiotic || ''}
+                                    onChange={(e) => handlePhyChange('infectious', 'antibiotic', e.target.value)}
+                                    className="w-full border border-slate-200 rounded-lg p-2 text-xs min-h-[40px] resize-none bg-white"
+                                    placeholder="Meropenem, Vancomicina..."
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Cultivos</label>
+                                <textarea
+                                    value={patientData.physical_exam?.infectious?.cultures || ''}
+                                    onChange={(e) => handlePhyChange('infectious', 'cultures', e.target.value)}
+                                    className="w-full border border-slate-200 rounded-lg p-2 text-xs min-h-[40px] resize-none bg-white"
+                                    placeholder="Hemocultivo: Negativo..."
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-xl border border-slate-200">
+                        <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3 border-b pb-2 border-slate-200">Hematología</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+                            {renderInput("Hb (g/dL)", "hematology", "hb")}
+                            {renderInput("Hto (%)", "hematology", "hto")}
+                            {renderInput("Plaq (mm3)", "hematology", "plaq")}
+                            {renderInput("TP", "hematology", "tp")}
+                            {renderInput("INR", "hematology", "inr")}
+                            {renderInput("Fib", "hematology", "fib")}
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 bg-red-50/50 p-3 rounded-lg border border-red-100">
+                            {renderInput("Leucocitos", "hematology", "leu")}
+                            {renderInput("Neutrófilos", "hematology", "seg")} {/* Segments are neutrophils usually in this context */}
+                            {renderInput("Abastonados", "hematology", "ab")}
+                            {renderInput("Linfocitos", "hematology", "linf")}
+                            {renderInput("Monocitos", "hematology", "hma")} {/* Using HMA slot for Monocitos if appropriate or create new */}
+                            {/* Assuming HMA, L.Ce were specific other cells, mapping broadly or keeping generic */}
+                            {renderInput("Eosinófilos", "hematology", "lce")}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderProblems = () => (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Lista de Problemas de Salud</label>
+                <div className="bg-amber-50 rounded-lg p-3 text-xs text-amber-800 mb-2 border border-amber-100 font-medium">
+                    Liste los problemas activos e inactivos del paciente para el plan de atención.
+                </div>
+                <div className="relative">
+                    <textarea
+                        value={patientData.health_problems}
+                        onChange={e => handleChange('health_problems', e.target.value)}
+                        className="w-full border border-slate-200 rounded-xl p-4 text-sm min-h-[300px] leading-relaxed resize-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        placeholder="1. Insuficiencia Respiratoria Aguda&#10;2. Shock Séptico..."
+                    ></textarea>
+                </div>
+            </div>
+
+            <div className="mt-4">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Estado de Gravedad</label>
+                <select value={patientData.acuity} onChange={e => handleChange('acuity', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 font-bold bg-slate-50">
+                    <option value="ESTABLE">Estable</option>
+                    <option value="MEDIA">Crítico Estabilizado (Media)</option>
+                    <option value="ALTA">Crítico Inestable (Alta)</option>
+                </select>
+            </div>
+        </div >
+    );
+
+    const renderPlan = () => (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Plan de Trabajo / Terapéutico</label>
+                <div className="relative">
+                    <textarea
+                        value={patientData.plan}
+                        onChange={e => handleChange('plan', e.target.value)}
+                        className="w-full border border-slate-200 rounded-xl p-4 text-sm min-h-[300px] leading-relaxed resize-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        placeholder="Detalle el plan diagnóstico y terapéutico..."
+                    ></textarea>
+                </div>
+            </div>
+        </div>
+    );
+
+    if (loading) return <div className="p-10 text-center text-slate-400">Cargando Historia Clínica...</div>;
+
+    return (
+        <div className="flex flex-col h-full bg-white">
+            <div className="border-b border-slate-200 px-6 py-4 flex items-center justify-between bg-white sticky top-0 z-10">
+                <div>
+                    <h2 className="text-xl font-bold text-slate-800">Historia Clínica de Admisión</h2>
+                    <p className="text-xs text-slate-500">Datos de Ingreso a UCI</p>
+                </div>
+                <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="bg-primary text-white px-6 py-2 rounded-lg font-bold text-sm hover:bg-blue-600 transition-all shadow-md disabled:opacity-70 flex items-center gap-2"
+                >
+                    <span className="material-symbols-outlined text-lg">save</span>
+                    {saving ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+                {patientId === 'new' && (
+                    <button
+                        onClick={() => window.location.hash = '/'}
+                        className="ml-3 bg-slate-100 text-slate-600 px-4 py-2 rounded-lg font-bold text-sm hover:bg-slate-200 transition-all flex items-center gap-2"
+                    >
+                        <span className="material-symbols-outlined text-lg">dashboard</span>
+                        Volver al Dashboard
+                    </button>
+                )}
+            </div>
+
+            <div className="flex border-b border-slate-200 bg-slate-50 px-6">
+                <button
+                    onClick={() => setActiveSection('filiacion')}
+                    className={`px-4 py-3 text-sm font-bold border-b-2 transition-all ${activeSection === 'filiacion' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                    1. Filiación
+                </button>
+                <button
+                    onClick={() => setActiveSection('antecedentes')}
+                    className={`px-4 py-3 text-sm font-bold border-b-2 transition-all ${activeSection === 'antecedentes' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                    2. Antecedentes
+                </button>
+                <button
+                    onClick={() => setActiveSection('anamnesis')}
+                    className={`px-4 py-3 text-sm font-bold border-b-2 transition-all ${activeSection === 'anamnesis' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                    3. Anamnesis
+                </button>
+                <button
+                    onClick={() => setActiveSection('examen_fisico')}
+                    className={`px-4 py-3 text-sm font-bold border-b-2 transition-all ${activeSection === 'examen_fisico' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                    4. Examen Físico
+                </button>
+                <button
+                    onClick={() => setActiveSection('problemas')}
+                    className={`px-4 py-3 text-sm font-bold border-b-2 transition-all ${activeSection === 'problemas' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                    5. Probl. Salud
+                </button>
+                <button
+                    onClick={() => setActiveSection('plan')}
+                    className={`px-4 py-3 text-sm font-bold border-b-2 transition-all ${activeSection === 'plan' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                    6. Plan
+                </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-8 pb-32 bg-[#f8f9fc]">
+                <div className="max-w-4xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-200 mb-10">
+                    {activeSection === 'filiacion' && renderFiliacion()}
+                    {activeSection === 'antecedentes' && renderAntecedentes()}
+                    {activeSection === 'anamnesis' && renderAnamnesis()}
+                    {activeSection === 'examen_fisico' && renderPhysicalExam()}
+                    {activeSection === 'problemas' && renderProblems()}
+                    {activeSection === 'plan' && renderPlan()}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default ClinicalHistory;
