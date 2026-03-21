@@ -624,6 +624,7 @@ const InterconsultasScreen: React.FC = () => {
                                                 <option value="Dr Ramirez">Dr Ramirez</option>
                                                 <option value="Dr Cruz">Dr Cruz</option>
                                                 <option value="Dr Diaz">Dr Diaz</option>
+                                                <option value="Dr Linares">Dr Linares</option>
                                                 <option value="Dr Sumari">Dr Sumari</option>
                                                 <option value="Dr Palacios">Dr Palacios</option>
                                                 <option value="Dra Quiñones">Dra Quiñones</option>
@@ -676,6 +677,7 @@ const InterconsultasScreen: React.FC = () => {
                                                 <option value="Dr Ramirez">Dr Ramirez</option>
                                                 <option value="Dr Cruz">Dr Cruz</option>
                                                 <option value="Dr Diaz">Dr Diaz</option>
+                                                <option value="Dr Linares">Dr Linares</option>
                                                 <option value="Dr Sumari">Dr Sumari</option>
                                                 <option value="Dr Palacios">Dr Palacios</option>
                                                 <option value="Dra Quiñones">Dra Quiñones</option>
@@ -727,6 +729,7 @@ const InterconsultasScreen: React.FC = () => {
                                                 <option value="Dr Ramirez">Dr Ramirez</option>
                                                 <option value="Dr Cruz">Dr Cruz</option>
                                                 <option value="Dr Diaz">Dr Diaz</option>
+                                                <option value="Dr Linares">Dr Linares</option>
                                                 <option value="Dr Sumari">Dr Sumari</option>
                                                 <option value="Dr Palacios">Dr Palacios</option>
                                                 <option value="Dra Quiñones">Dra Quiñones</option>
