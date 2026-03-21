@@ -45,6 +45,7 @@ export interface Interconsultation {
   id: string;
   created_at: string;
   patient_name: string;
+  dni?: string;
   age: number;
   sex: string;
   hc: string;

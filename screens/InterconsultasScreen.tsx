@@ -17,6 +17,8 @@ const InterconsultasScreen: React.FC = () => {
         status: 'pending'
     });
 
+    const [viewMode, setViewMode] = useState<'waiting' | 'pcr' | 'all'>('waiting');
+
     useEffect(() => {
         fetchInterconsultations();
     }, []);
@@ -35,9 +37,10 @@ const InterconsultasScreen: React.FC = () => {
 
     const handleNew = () => {
         setFormData({
-            reason: 'evaluacion_pase',
-            priority: '3',
-            status: 'pending'
+            reason: viewMode === 'pcr' ? 'pcr' : 'evaluacion_pase',
+            priority: viewMode === 'pcr' ? '1' : '3',
+            status: 'pending',
+            dni: ''
         });
         setShowModal(true);
     };
@@ -47,11 +50,46 @@ const InterconsultasScreen: React.FC = () => {
         setShowModal(true);
     };
 
+    const handleLookup = async (field: 'hc' | 'dni', value: string) => {
+        if (!value) return;
+        
+        try {
+            const { data, error } = await supabase
+                .from('patients')
+                .select('name, dob, sex, hc, dni')
+                .eq(field, value)
+                .maybeSingle();
+
+            if (error) throw error;
+            
+            if (data) {
+                let age = undefined;
+                if (data.dob) {
+                    const birthYear = new Date(data.dob).getFullYear();
+                    const currentYear = new Date().getFullYear();
+                    age = currentYear - birthYear;
+                }
+
+                setFormData(prev => ({
+                    ...prev,
+                    patient_name: data.name,
+                    hc: data.hc,
+                    dni: data.dni,
+                    sex: data.sex,
+                    age: age
+                }));
+            }
+        } catch (err) {
+            console.error('Error lookup patient:', err);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            const { dni, ...cleanFormData } = formData;
             const payload = {
-                ...formData,
+                ...cleanFormData,
                 // Ensure numeric fields are numbers
                 age: formData.age ? Number(formData.age) : undefined,
                 cvc_attempts: formData.cvc_attempts ? Number(formData.cvc_attempts) : undefined
@@ -80,8 +118,54 @@ const InterconsultasScreen: React.FC = () => {
         }
     };
 
+    const renderStatusBadge = (status?: string, priority?: string) => {
+        if (status === 'pending') {
+            if (priority === 'PCR') return <span className="text-[10px] font-black uppercase px-2 py-1 rounded border bg-amber-50 text-amber-600 border-amber-100">Pendiente Ingreso</span>;
+            return (
+                <span className="text-[10px] font-black uppercase px-2 py-1 rounded border bg-amber-50 text-amber-600 border-amber-100">
+                    Pendiente Ingreso
+                </span>
+            );
+        }
+        if (status === 'admitted') {
+            return (
+                <span className="text-[10px] font-black uppercase px-2 py-1 rounded border bg-green-50 text-green-600 border-green-100">
+                    Admitido
+                </span>
+            );
+        }
+        if (status === 'completed' || status === 'fallecido') {
+            const isFallecido = priority === 'PCR' || status === 'fallecido';
+            if (!isFallecido && (priority === '4A' || priority === '4B')) {
+                return (
+                    <span className="text-[10px] font-black uppercase px-2 py-1 rounded border bg-indigo-50 text-indigo-600 border-indigo-100 italic">
+                        No Tributario
+                    </span>
+                );
+            }
+            return (
+                <span className={`text-[10px] font-black uppercase px-2 py-1 rounded border ${isFallecido ? 'bg-red-50 text-red-600 border-red-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'}`}>
+                    {isFallecido ? 'Fallecido' : 'Completado'}
+                </span>
+            );
+        }
+        if (status === 'vivo') return <span className="text-[10px] font-black uppercase px-2 py-1 rounded border bg-amber-50 text-amber-600 border-amber-100">Pendiente Ingreso</span>;
+        
+        return <span className="text-[10px] font-black uppercase px-2 py-1 rounded border bg-slate-50 text-slate-400 border-slate-100">---</span>;
+    };
+
     const handleChange = (field: string, value: any) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
+        setFormData(prev => {
+            const newState = { ...prev, [field]: value };
+            if (field === 'priority') {
+                if (value === '4A' || value === '4B') {
+                    newState.status = 'completed';
+                } else if (prev.status === 'completed') {
+                    newState.status = 'pending';
+                }
+            }
+            return newState;
+        });
     };
 
     return (
@@ -94,20 +178,68 @@ const InterconsultasScreen: React.FC = () => {
                             <span className="material-symbols-outlined text-xl md:text-2xl filled">arrow_back</span>
                         </div>
                         <div>
-                            <h1 className="text-lg md:text-xl font-extrabold leading-tight tracking-tight text-slate-900">Interconsultas</h1>
+                            <h1 className="text-lg md:text-xl font-extrabold leading-tight tracking-tight text-slate-900">
+                                {viewMode === 'waiting' ? 'Lista de Espera UCI' : viewMode === 'pcr' ? 'Pacientes PCR' : 'Todas las Interconsultas'}
+                            </h1>
                             <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-wider hidden sm:block">
-                                Gestión de ingresos y procedimientos
+                                {viewMode === 'waiting' ? 'Pacientes Prioridad 1, 2 y 3' : 
+                                 viewMode === 'pcr' ? 'Pacientes con antecedente de Paro' : 
+                                 'Historial completo de evaluaciones'}
                             </p>
                         </div>
                     </div>
-                    <button
-                        onClick={handleNew}
-                        className="bg-indigo-600 text-white px-3 md:px-5 py-2 md:py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition flex items-center gap-1.5 md:gap-2 shadow-lg hover:shadow-xl hover:-translate-y-0.5 shrink-0"
-                    >
-                        <span className="material-symbols-outlined text-[20px] md:text-[24px]">add</span>
-                        <span className="hidden sm:inline">Nueva Interconsulta</span>
-                        <span className="sm:hidden text-sm uppercase tracking-wide">Nueva</span>
-                    </button>
+
+                    <div className="flex items-center gap-2 md:gap-4">
+                        <div className="hidden sm:flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                            <button 
+                                onClick={() => setViewMode('waiting')}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${viewMode === 'waiting' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Espera
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('pcr')}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${viewMode === 'pcr' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                PCR
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('all')}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${viewMode === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Todas
+                            </button>
+                        </div>
+
+                        {/* Mobile Toggle Icons */}
+                        <div className="sm:hidden flex items-center gap-1">
+                            <button 
+                                onClick={() => setViewMode('waiting')}
+                                className={`p-2 rounded-lg ${viewMode === 'waiting' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-400'}`}
+                            >
+                                <span className="material-symbols-outlined text-xl">list</span>
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('pcr')}
+                                className={`p-2 rounded-lg ${viewMode === 'pcr' ? 'bg-red-100 text-red-600' : 'text-slate-400'}`}
+                            >
+                                <span className="material-symbols-outlined text-xl">emergency</span>
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('all')}
+                                className={`p-2 rounded-lg ${viewMode === 'all' ? 'bg-slate-200 text-slate-700' : 'text-slate-400'}`}
+                            >
+                                <span className="material-symbols-outlined text-xl">database</span>
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={handleNew}
+                            className="px-3 md:px-5 py-2 md:py-2.5 rounded-xl font-bold transition flex items-center justify-center shadow-lg hover:shadow-xl hover:-translate-y-0.5 shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white text-xs md:text-sm"
+                        >
+                            Registrar Nueva IC
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -123,8 +255,9 @@ const InterconsultasScreen: React.FC = () => {
                                     <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Prioridad</th>
                                     <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Origen</th>
                                     <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Problemas</th>
-                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Motivo</th>
-                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Estado</th>
+                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Motivo</th>
+                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Médico</th>
+                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Estado</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -132,17 +265,33 @@ const InterconsultasScreen: React.FC = () => {
                                     <tr>
                                         <td colSpan={6} className="px-6 py-8 text-center text-slate-500 animate-pulse">Cargando lista de espera...</td>
                                     </tr>
-                                ) : interconsultations.length === 0 ? (
+                                ) : interconsultations.filter(ic => {
+                                        if (viewMode === 'waiting') return ic.status === 'pending';
+                                        if (viewMode === 'pcr') return ic.reason === 'pcr';
+                                        return true;
+                                    }).length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="px-6 py-12 text-center">
                                             <div className="flex flex-col items-center justify-center text-slate-400">
-                                                <span className="material-symbols-outlined text-4xl mb-2">assignment_add</span>
-                                                <p className="font-medium">No hay pacientes en lista de espera</p>
+                                                <span className="material-symbols-outlined text-4xl mb-2">
+                                                    {viewMode === 'waiting' ? 'assignment_add' : 'emergency'}
+                                                </span>
+                                                <p className="font-medium">
+                                                    {viewMode === 'waiting' ? 'No hay pacientes en lista de espera' : 
+                                                     viewMode === 'pcr' ? 'No hay pacientes PCR registrados' : 
+                                                     'No hay interconsultas registradas'}
+                                                </p>
                                             </div>
                                         </td>
                                     </tr>
                                 ) : (
-                                    interconsultations.map((ic) => (
+                                    interconsultations
+                                        .filter(ic => {
+                                            if (viewMode === 'waiting') return ic.status === 'pending';
+                                            if (viewMode === 'pcr') return ic.reason === 'pcr';
+                                            return true;
+                                        })
+                                        .map((ic) => (
                                         <tr key={ic.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => handleEdit(ic)}>
                                             <td className="px-6 py-4">
                                                 <div className="font-bold text-slate-900">{ic.patient_name}</div>
@@ -190,15 +339,18 @@ const InterconsultasScreen: React.FC = () => {
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4">
+                                            <td className="px-6 py-4 text-center">
                                                 <span className="inline-block px-2 py-1 rounded border border-slate-200 bg-white text-xs font-bold text-slate-600 uppercase tracking-tight">
                                                     {ic.reason?.replace('_', ' ')}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <span className={`text-[10px] font-black uppercase px-2 py-1 rounded border ${ic.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-green-50 text-green-600 border-green-100'}`}>
-                                                    {ic.status === 'pending' ? 'Pendiente' : 'Admitido'}
-                                                </span>
+                                            <td className="px-6 py-4 text-center">
+                                                <div className="text-xs font-bold text-slate-600 truncate max-w-[120px]">
+                                                    {ic.responders || '---'}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                {renderStatusBadge(ic.status, ic.reason === 'pcr' ? 'PCR' : ic.priority)}
                                             </td>
                                         </tr>
                                     ))
@@ -212,13 +364,29 @@ const InterconsultasScreen: React.FC = () => {
                 <div className="md:hidden flex flex-col gap-4 mt-2">
                     {loading ? (
                         <div className="text-center p-8 text-slate-500 font-bold animate-pulse">Cargando lista de espera...</div>
-                    ) : interconsultations.length === 0 ? (
+                                    ) : interconsultations.filter(ic => {
+                        if (viewMode === 'waiting') return ic.status === 'pending';
+                        if (viewMode === 'pcr') return ic.reason === 'pcr';
+                        return true;
+                    }).length === 0 ? (
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center flex flex-col items-center justify-center text-slate-400">
-                            <span className="material-symbols-outlined text-4xl mb-2">assignment_add</span>
-                            <p className="font-medium text-sm">No hay pacientes en espera</p>
+                            <span className="material-symbols-outlined text-4xl mb-2">
+                                {viewMode === 'waiting' ? 'assignment_add' : 'emergency'}
+                            </span>
+                            <p className="font-medium text-sm">
+                                {viewMode === 'waiting' ? 'No hay pacientes en espera' : 
+                                 viewMode === 'pcr' ? 'No hay pacientes PCR' :
+                                 'No hay interconsultas'}
+                            </p>
                         </div>
                     ) : (
-                        interconsultations.map((ic) => (
+                        interconsultations
+                                .filter(ic => {
+                                    if (viewMode === 'waiting') return ic.status === 'pending';
+                                    if (viewMode === 'pcr') return ic.reason === 'pcr';
+                                    return true;
+                                })
+                            .map((ic) => (
                             <div key={ic.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col gap-3 relative overflow-hidden cursor-pointer" onClick={() => handleEdit(ic)}>
                                 <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${ic.priority === '1' ? 'bg-red-500' : ic.priority === '2' ? 'bg-amber-500' : 'bg-indigo-400'}`}></div>
 
@@ -229,9 +397,7 @@ const InterconsultasScreen: React.FC = () => {
                                             HC: {ic.hc || '----'} • {ic.age}a • {ic.sex === 'M' ? 'Masc' : 'Fem'}
                                         </div>
                                     </div>
-                                    <span className={`text-[9px] font-black uppercase px-2 py-1 rounded border ${ic.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-green-50 text-green-600 border-green-100'} shrink-0 ml-2`}>
-                                        {ic.status === 'pending' ? 'Pendiente' : 'Admitido'}
-                                    </span>
+                                    {renderStatusBadge(ic.status, ic.reason === 'pcr' ? 'PCR' : ic.priority)}
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2 pl-2">
@@ -269,9 +435,16 @@ const InterconsultasScreen: React.FC = () => {
                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                                         <span className="material-symbols-outlined text-[14px]">info</span> Motivo
                                     </span>
-                                    <span className="text-[10px] font-black text-indigo-700 uppercase bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100 shadow-sm shadow-indigo-100">
-                                        {ic.reason?.replace('_', ' ')}
-                                    </span>
+                                    <div className="flex flex-col items-end">
+                                        <span className="text-[10px] font-black text-indigo-700 uppercase bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100 shadow-sm shadow-indigo-100">
+                                            {ic.reason?.replace('_', ' ')}
+                                        </span>
+                                        {ic.responders && (
+                                            <span className="text-[9px] font-bold text-slate-400 uppercase mt-1">
+                                                {ic.responders}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ))
@@ -298,7 +471,7 @@ const InterconsultasScreen: React.FC = () => {
                             {/* Sección Datos Paciente */}
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 <div className="md:col-span-2">
-                                    <label className="label-std">Nombre del Paciente</label>
+                                    <label className="label-std">Apellido y Nombre de paciente</label>
                                     <input required type="text" className="input-std" value={formData.patient_name || ''} onChange={e => handleChange('patient_name', e.target.value)} />
                                 </div>
                                 <div>
@@ -313,9 +486,25 @@ const InterconsultasScreen: React.FC = () => {
                                         <option value="F">Femenino</option>
                                     </select>
                                 </div>
-                                <div className="md:col-span-1">
+                                <div>
                                     <label className="label-std">HC</label>
-                                    <input type="text" className="input-std" value={formData.hc || ''} onChange={e => handleChange('hc', e.target.value)} />
+                                    <input 
+                                        type="text" 
+                                        className="input-std" 
+                                        value={formData.hc || ''} 
+                                        onChange={e => handleChange('hc', e.target.value)}
+                                        onBlur={e => handleLookup('hc', e.target.value)}
+                                    />
+                                </div>
+                                <div className="md:col-span-1">
+                                    <label className="label-std">DNI</label>
+                                    <input 
+                                        type="text" 
+                                        className="input-std" 
+                                        value={formData.dni || ''} 
+                                        onChange={e => handleChange('dni', e.target.value)}
+                                        onBlur={e => handleLookup('dni', e.target.value)}
+                                    />
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className="label-std">Servicio Procedencia</label>
@@ -359,6 +548,7 @@ const InterconsultasScreen: React.FC = () => {
                                     <option value="procedimiento">Procedimiento</option>
                                     <option value="pcr">PCR</option>
                                     <option value="ustna">USTNA</option>
+                                    <option value="evaluacion_sugerencias">Evaluación y Sugerencias</option>
                                 </select>
                             </div>
 
@@ -409,8 +599,8 @@ const InterconsultasScreen: React.FC = () => {
 
                                     <div>
                                         <label className="label-std">Prioridad de Admisión</label>
-                                        <select className="input-std border-indigo-200 bg-white font-bold text-slate-700" value={formData.priority || '3'} onChange={e => handleChange('priority', e.target.value)}>
-                                            <option value="3">Seleccionar Prioridad...</option>
+                                        <select className="input-std border-indigo-200 bg-white font-bold text-slate-700" value={formData.priority || ''} onChange={e => handleChange('priority', e.target.value)}>
+                                            <option value="">Seleccionar Prioridad...</option>
                                             <option value="1">Prioridad 1 (Crítico Inestable)</option>
                                             <option value="2">Prioridad 2 (Crítico Estable)</option>
                                             <option value="3">Prioridad 3 (Estable / Recuperable)</option>
@@ -426,15 +616,129 @@ const InterconsultasScreen: React.FC = () => {
                                             <input type="datetime-local" className="input-std" value={formData.response_date ? formData.response_date.slice(0, 16) : ''} onChange={e => handleChange('response_date', e.target.value)} />
                                         </div>
                                         <div>
-                                            <label className="label-std">Médico Responde</label>
-                                            <input type="text" className="input-std" placeholder="Médico / Residente" value={formData.responders || ''} onChange={e => handleChange('responders', e.target.value)} />
+                                            <label className="label-std">Médico Asistente</label>
+                                            <select className="input-std" value={formData.responders || ''} onChange={e => handleChange('responders', e.target.value)}>
+                                                <option value="">Seleccionar...</option>
+                                                <option value="Dr Geng">Dr Geng</option>
+                                                <option value="Dr Solorzano">Dr Solorzano</option>
+                                                <option value="Dr Ramirez">Dr Ramirez</option>
+                                                <option value="Dr Cruz">Dr Cruz</option>
+                                                <option value="Dr Diaz">Dr Diaz</option>
+                                                <option value="Dr Sumari">Dr Sumari</option>
+                                                <option value="Dr Palacios">Dr Palacios</option>
+                                                <option value="Dra Quiñones">Dra Quiñones</option>
+                                                <option value="Dr Palma">Dr Palma</option>
+                                                <option value="Dr Becerra">Dr Becerra</option>
+                                            </select>
                                         </div>
                                         <div className="md:col-span-2">
                                             <label className="label-std">Estado</label>
-                                            <select className="input-std" value={formData.status || 'pending'} onChange={e => handleChange('status', e.target.value)}>
-                                                <option value="pending">Pendiente</option>
-                                                <option value="admitted">Admitido</option>
-                                                <option value="rejected">Rechazado</option>
+                                            <select className="input-std" value={formData.status || ''} onChange={e => handleChange('status', e.target.value)}>
+                                                {(formData.priority === '1' || formData.priority === '2' || formData.priority === '3' || !formData.priority) ? (
+                                                    <>
+                                                        <option value="pending">Pendiente Ingreso</option>
+                                                        <option value="admitted">Admitido</option>
+                                                    </>
+                                                ) : (
+                                                    <option value="completed">No tributario de área crítica</option>
+                                                )}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Lógica Condicional: Evaluación y Sugerencias */}
+                            {formData.reason === 'evaluacion_sugerencias' && (
+                                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4 animate-in fade-in slide-in-from-top-2">
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <div>
+                                            <label className="label-std">Problema de Salud #1</label>
+                                            <input type="text" className="input-std" placeholder="Principal problema activo" value={formData.health_problem_1 || ''} onChange={e => handleChange('health_problem_1', e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="label-std">Problema de Salud #2</label>
+                                            <input type="text" className="input-std" placeholder="Secundario o comorbilidad" value={formData.health_problem_2 || ''} onChange={e => handleChange('health_problem_2', e.target.value)} />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-200 mt-2">
+                                        <div>
+                                            <label className="label-std">Fecha Respuesta IC</label>
+                                            <input type="datetime-local" className="input-std" value={formData.response_date ? formData.response_date.slice(0, 16) : ''} onChange={e => handleChange('response_date', e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="label-std">Médico Asistente</label>
+                                            <select className="input-std" value={formData.responders || ''} onChange={e => handleChange('responders', e.target.value)}>
+                                                <option value="">Seleccionar...</option>
+                                                <option value="Dr Geng">Dr Geng</option>
+                                                <option value="Dr Solorzano">Dr Solorzano</option>
+                                                <option value="Dr Ramirez">Dr Ramirez</option>
+                                                <option value="Dr Cruz">Dr Cruz</option>
+                                                <option value="Dr Diaz">Dr Diaz</option>
+                                                <option value="Dr Sumari">Dr Sumari</option>
+                                                <option value="Dr Palacios">Dr Palacios</option>
+                                                <option value="Dra Quiñones">Dra Quiñones</option>
+                                                <option value="Dr Palma">Dr Palma</option>
+                                                <option value="Dr Becerra">Dr Becerra</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Lógica Condicional: PCR */}
+                            {formData.reason === 'pcr' && (
+                                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4 animate-in fade-in slide-in-from-top-2">
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <div>
+                                            <label className="label-std">Problema de Salud #1</label>
+                                            <input type="text" className="input-std" placeholder="Principal problema activo" value={formData.health_problem_1 || ''} onChange={e => handleChange('health_problem_1', e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="label-std">Problema de Salud #2</label>
+                                            <input type="text" className="input-std" placeholder="Secundario o comorbilidad" value={formData.health_problem_2 || ''} onChange={e => handleChange('health_problem_2', e.target.value)} />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="label-std">Prioridad de Admisión</label>
+                                        <select className="input-std border-indigo-200 bg-white font-bold text-slate-700" value={formData.priority || ''} onChange={e => handleChange('priority', e.target.value)}>
+                                            <option value="">Seleccionar Prioridad...</option>
+                                            <option value="1">Prioridad 1 (Crítico Inestable)</option>
+                                            <option value="2">Prioridad 2 (Crítico Estable)</option>
+                                            <option value="3">Prioridad 3 (Estable / Recuperable)</option>
+                                            <option value="4A">Prioridad 4A</option>
+                                            <option value="4B">Prioridad 4B</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-200 mt-2">
+                                        <div>
+                                            <label className="label-std">Fecha Respuesta IC</label>
+                                            <input type="datetime-local" className="input-std" value={formData.response_date ? formData.response_date.slice(0, 16) : ''} onChange={e => handleChange('response_date', e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="label-std">Médico Asistente</label>
+                                            <select className="input-std" value={formData.responders || ''} onChange={e => handleChange('responders', e.target.value)}>
+                                                <option value="">Seleccionar...</option>
+                                                <option value="Dr Geng">Dr Geng</option>
+                                                <option value="Dr Solorzano">Dr Solorzano</option>
+                                                <option value="Dr Ramirez">Dr Ramirez</option>
+                                                <option value="Dr Cruz">Dr Cruz</option>
+                                                <option value="Dr Diaz">Dr Diaz</option>
+                                                <option value="Dr Sumari">Dr Sumari</option>
+                                                <option value="Dr Palacios">Dr Palacios</option>
+                                                <option value="Dra Quiñones">Dra Quiñones</option>
+                                                <option value="Dr Palma">Dr Palma</option>
+                                                <option value="Dr Becerra">Dr Becerra</option>
+                                            </select>
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="label-std">Estado</label>
+                                            <select className="input-std" value={formData.status || ''} onChange={e => handleChange('status', e.target.value)}>
+                                                <option value="pending">PENDIENTE INGRESO</option>
+                                                <option value="completed">FALLECIDO</option>
                                             </select>
                                         </div>
                                     </div>
@@ -446,8 +750,8 @@ const InterconsultasScreen: React.FC = () => {
                                     {formData.id ? 'Actualizar Interconsulta' : 'Registrar Interconsulta'}
                                 </button>
                                 {formData.id && (
-                                    <button 
-                                        type="button" 
+                                    <button
+                                        type="button"
                                         onClick={async () => {
                                             if (window.confirm('¿Está seguro de eliminar esta interconsulta?')) {
                                                 try {
