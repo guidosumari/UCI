@@ -171,74 +171,70 @@ const InterconsultasScreen: React.FC = () => {
     return (
         <div className="min-h-screen bg-slate-50 relative font-sans">
             {/* Header similar to Dashboard */}
-            <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 md:px-6 py-3 shadow-sm">
-                <div className="max-w-[1600px] mx-auto flex items-center justify-between">
-                    <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
-                        <div className="flex items-center justify-center size-10 rounded-xl bg-indigo-600 shadow-sm text-white shrink-0">
-                            <span className="material-symbols-outlined text-xl md:text-2xl filled">arrow_back</span>
+            <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all duration-300">
+                <div className="max-w-[1600px] mx-auto px-4 md:px-6">
+                    {/* Top Row: Navigation and Action */}
+                    <div className="flex items-center justify-between py-3 gap-3">
+                        <div className="flex items-center gap-2 md:gap-3 cursor-pointer min-w-0" onClick={() => navigate('/')}>
+                            <div className="flex items-center justify-center size-9 md:size-10 rounded-xl bg-indigo-600 shadow-sm text-white shrink-0">
+                                <span className="material-symbols-outlined text-xl md:text-2xl filled">arrow_back</span>
+                            </div>
+                            <div className="truncate">
+                                <h1 className="text-base md:text-xl font-extrabold leading-tight tracking-tight text-slate-900 truncate">
+                                    {viewMode === 'waiting' ? 'Lista de Espera UCI' : viewMode === 'pcr' ? 'Pacientes PCR' : 'Todas las Interconsultas'}
+                                </h1>
+                                <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-wider hidden sm:block">
+                                    {viewMode === 'waiting' ? 'Pacientes Prioridad 1, 2 y 3' : 
+                                     viewMode === 'pcr' ? 'Pacientes con antecedente de Paro' : 
+                                     'Historial completo de evaluaciones'}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h1 className="text-lg md:text-xl font-extrabold leading-tight tracking-tight text-slate-900">
-                                {viewMode === 'waiting' ? 'Lista de Espera UCI' : viewMode === 'pcr' ? 'Pacientes PCR' : 'Todas las Interconsultas'}
-                            </h1>
-                            <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-wider hidden sm:block">
-                                {viewMode === 'waiting' ? 'Pacientes Prioridad 1, 2 y 3' : 
-                                 viewMode === 'pcr' ? 'Pacientes con antecedente de Paro' : 
-                                 'Historial completo de evaluaciones'}
-                            </p>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                            {/* Desktop View Modes */}
+                            <div className="hidden lg:flex bg-slate-100 p-1 rounded-xl border border-slate-200 mr-2">
+                                <button onClick={() => setViewMode('waiting')} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${viewMode === 'waiting' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Espera</button>
+                                <button onClick={() => setViewMode('pcr')} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${viewMode === 'pcr' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>PCR</button>
+                                <button onClick={() => setViewMode('all')} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${viewMode === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Todas</button>
+                            </div>
+
+                            <button
+                                onClick={handleNew}
+                                className="px-3 md:px-5 py-2 md:py-2.5 rounded-xl font-bold transition flex items-center justify-center shadow-lg hover:shadow-xl hover:-translate-y-0.5 shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] md:text-sm whitespace-nowrap"
+                            >
+                                <span className="material-symbols-outlined text-lg mr-1.5 sm:hidden">add_circle</span>
+                                <span className="hidden sm:inline">Registrar Nueva IC</span>
+                                <span className="sm:hidden">Nueva IC</span>
+                            </button>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 md:gap-4">
-                        <div className="hidden sm:flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                    {/* Bottom Row (Mobile Only): View Switcher */}
+                    <div className="lg:hidden flex items-center justify-center pb-3 pt-1 overflow-x-auto no-scrollbar">
+                        <div className="flex bg-slate-100/80 p-1 rounded-xl border border-slate-200 w-full max-w-sm">
                             <button 
                                 onClick={() => setViewMode('waiting')}
-                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${viewMode === 'waiting' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === 'waiting' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
                             >
-                                Espera
+                                <span className="material-symbols-outlined text-base">list</span>
+                                <span>Espera</span>
                             </button>
                             <button 
                                 onClick={() => setViewMode('pcr')}
-                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${viewMode === 'pcr' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === 'pcr' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'}`}
                             >
-                                PCR
+                                <span className="material-symbols-outlined text-base">emergency</span>
+                                <span>PCR</span>
                             </button>
                             <button 
                                 onClick={() => setViewMode('all')}
-                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${viewMode === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === 'all' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
                             >
-                                Todas
+                                <span className="material-symbols-outlined text-base">database</span>
+                                <span>Todas</span>
                             </button>
                         </div>
-
-                        {/* Mobile Toggle Icons */}
-                        <div className="sm:hidden flex items-center gap-1">
-                            <button 
-                                onClick={() => setViewMode('waiting')}
-                                className={`p-2 rounded-lg ${viewMode === 'waiting' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-400'}`}
-                            >
-                                <span className="material-symbols-outlined text-xl">list</span>
-                            </button>
-                            <button 
-                                onClick={() => setViewMode('pcr')}
-                                className={`p-2 rounded-lg ${viewMode === 'pcr' ? 'bg-red-100 text-red-600' : 'text-slate-400'}`}
-                            >
-                                <span className="material-symbols-outlined text-xl">emergency</span>
-                            </button>
-                            <button 
-                                onClick={() => setViewMode('all')}
-                                className={`p-2 rounded-lg ${viewMode === 'all' ? 'bg-slate-200 text-slate-700' : 'text-slate-400'}`}
-                            >
-                                <span className="material-symbols-outlined text-xl">database</span>
-                            </button>
-                        </div>
-
-                        <button
-                            onClick={handleNew}
-                            className="px-3 md:px-5 py-2 md:py-2.5 rounded-xl font-bold transition flex items-center justify-center shadow-lg hover:shadow-xl hover:-translate-y-0.5 shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white text-xs md:text-sm"
-                        >
-                            Registrar Nueva IC
-                        </button>
                     </div>
                 </div>
             </header>
@@ -387,64 +383,65 @@ const InterconsultasScreen: React.FC = () => {
                                     return true;
                                 })
                             .map((ic) => (
-                            <div key={ic.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col gap-3 relative overflow-hidden cursor-pointer" onClick={() => handleEdit(ic)}>
-                                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${ic.priority === '1' ? 'bg-red-500' : ic.priority === '2' ? 'bg-amber-500' : 'bg-indigo-400'}`}></div>
-
-                                <div className="flex justify-between items-start pl-2">
-                                    <div>
-                                        <div className="font-black text-slate-900 leading-tight text-lg">{ic.patient_name}</div>
-                                        <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-0.5">
-                                            HC: {ic.hc || '----'} • {ic.age}a • {ic.sex === 'M' ? 'Masc' : 'Fem'}
+                            <div key={ic.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col relative overflow-hidden cursor-pointer hover:border-indigo-300 transition-all border-l-4" style={{ borderLeftColor: ic.priority === '1' ? '#ef4444' : ic.priority === '2' ? '#f59e0b' : '#818cf8' }} onClick={() => handleEdit(ic)}>
+                                <div className="p-4 space-y-3">
+                                    <div className="flex justify-between items-start">
+                                        <div className="min-w-0 flex-1 mr-2">
+                                            <div className="font-extrabold text-slate-900 leading-tight text-base truncate uppercase">{ic.patient_name}</div>
+                                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                                                HC: <span className="text-slate-600">{ic.hc || '----'}</span> • {ic.age}a • {ic.sex === 'M' ? 'Masc' : 'Fem'}
+                                            </div>
                                         </div>
+                                        {renderStatusBadge(ic.status, ic.reason === 'pcr' ? 'PCR' : ic.priority)}
                                     </div>
-                                    {renderStatusBadge(ic.status, ic.reason === 'pcr' ? 'PCR' : ic.priority)}
-                                </div>
 
-                                <div className="flex flex-wrap items-center gap-2 pl-2">
-                                    {ic.priority && (
-                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wide
-                                            ${ic.priority === '1' ? 'bg-red-50 text-red-600 border border-red-100' :
-                                                ic.priority === '2' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                                    'bg-indigo-50 text-indigo-600 border border-indigo-100'}`}>
-                                            {ic.priority === '1' && <span className="relative flex h-1.5 w-1.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span></span>}
-                                            Prio {ic.priority}
-                                        </span>
-                                    )}
-                                    <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 uppercase">
-                                        <span className="material-symbols-outlined text-[12px] align-middle mr-1">meeting_room</span>
-                                        {ic.service_origin} (C-{ic.bed_number})
-                                    </span>
-                                </div>
-
-                                <div className="flex flex-col gap-1.5 mt-1 pl-2">
-                                    {ic.health_problem_1 && (
-                                        <div className="text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-100 px-2.5 py-1.5 rounded-lg flex items-start gap-1.5 leading-tight">
-                                            <span className="size-1.5 rounded-full bg-indigo-500 mt-1 shrink-0"></span>
-                                            {ic.health_problem_1}
-                                        </div>
-                                    )}
-                                    {ic.health_problem_2 && (
-                                        <div className="text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-100 px-2.5 py-1.5 rounded-lg flex items-start gap-1.5 leading-tight">
-                                            <span className="size-1.5 rounded-full bg-slate-400 mt-1 shrink-0"></span>
-                                            {ic.health_problem_2}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="mt-2 pt-3 border-t border-slate-100 flex justify-between items-center pl-2">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-[14px]">info</span> Motivo
-                                    </span>
-                                    <div className="flex flex-col items-end">
-                                        <span className="text-[10px] font-black text-indigo-700 uppercase bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100 shadow-sm shadow-indigo-100">
-                                            {ic.reason?.replace('_', ' ')}
-                                        </span>
-                                        {ic.responders && (
-                                            <span className="text-[9px] font-bold text-slate-400 uppercase mt-1">
-                                                {ic.responders}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {ic.priority && (
+                                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wide
+                                                ${ic.priority === '1' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                                    ic.priority === '2' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                        'bg-indigo-50 text-indigo-600 border border-indigo-100'}`}>
+                                                {ic.priority === '1' && <span className="relative flex h-1.5 w-1.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span></span>}
+                                                Prio {ic.priority}
                                             </span>
                                         )}
+                                        <div className="text-[10px] font-bold text-slate-600 bg-slate-100/80 px-2 py-0.5 rounded-md border border-slate-200 flex items-center gap-1 capitalize">
+                                            <span className="material-symbols-outlined text-[13px]">meeting_room</span>
+                                            {ic.service_origin || '---'} (C-{ic.bed_number})
+                                        </div>
                                     </div>
+
+                                    <div className="flex flex-col gap-1.5 py-2 px-3 bg-slate-50/50 rounded-xl border border-slate-100">
+                                        {ic.health_problem_1 && (
+                                            <div className="flex items-start gap-2 text-[11px] font-bold text-slate-600">
+                                                <span className="size-1.5 rounded-full bg-indigo-500 mt-1 shrink-0"></span>
+                                                <span className="italic">{ic.health_problem_1}</span>
+                                            </div>
+                                        )}
+                                        {ic.health_problem_2 && (
+                                            <div className="flex items-start gap-2 text-[11px] font-bold text-slate-500">
+                                                <span className="size-1.5 rounded-full bg-slate-300 mt-1 shrink-0"></span>
+                                                <span className="italic font-medium">{ic.health_problem_2}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="border-t border-slate-100 bg-slate-50/30 px-4 py-2.5 flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                        <div className="size-6 rounded-full bg-indigo-100 flex items-center justify-center">
+                                            <span className="material-symbols-outlined text-xs text-indigo-600">info</span>
+                                        </div>
+                                        <div className="text-[10px] font-black text-indigo-700 uppercase tracking-tight">
+                                            {ic.reason?.replace('_', ' ')}
+                                        </div>
+                                    </div>
+                                    {ic.responders && (
+                                        <div className="flex items-center gap-1.5 text-[9px] font-bold text-slate-400 uppercase">
+                                            <span className="material-symbols-outlined text-[12px]">clinical_notes</span>
+                                            {ic.responders}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))
