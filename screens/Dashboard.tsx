@@ -466,7 +466,7 @@ const Dashboard: React.FC = () => {
             >
               <div className="text-center p-6">
                 <div className="size-16 rounded-full bg-white border border-slate-200 flex items-center justify-center mx-auto mb-4 text-slate-300 group-hover:text-emerald-500 transition-colors shadow-sm">
-                  <span className="material-symbols-outlined text-3xl">database</span>
+                  <span className="material-symbols-outlined text-3xl hidden sm:block">database</span>
                 </div>
                 <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mt-2">Cargar Datos de Prueba</h3>
                 <p className="text-xs text-slate-400 mt-1">Restaurar pacientes de ejemplo</p>

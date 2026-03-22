@@ -177,7 +177,8 @@ const InterconsultasScreen: React.FC = () => {
                     <div className="flex items-center justify-between py-3 gap-3">
                         <div className="flex items-center gap-2 md:gap-3 cursor-pointer min-w-0" onClick={() => navigate('/')}>
                             <div className="flex items-center justify-center size-9 md:size-10 rounded-xl bg-indigo-600 shadow-sm text-white shrink-0">
-                                <span className="material-symbols-outlined text-xl md:text-2xl filled">arrow_back</span>
+                                <span className="material-symbols-outlined text-xl md:text-2xl filled hidden sm:inline-block">arrow_back</span>
+                                <span className="sm:hidden font-black text-lg">{'<'}</span>
                             </div>
                             <div className="truncate">
                                 <h1 className="text-base md:text-xl font-extrabold leading-tight tracking-tight text-slate-900 truncate">
@@ -203,7 +204,6 @@ const InterconsultasScreen: React.FC = () => {
                                 onClick={handleNew}
                                 className="px-3 md:px-5 py-2 md:py-2.5 rounded-xl font-bold transition flex items-center justify-center shadow-lg hover:shadow-xl hover:-translate-y-0.5 shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] md:text-sm whitespace-nowrap"
                             >
-                                <span className="material-symbols-outlined text-lg mr-1.5 sm:hidden">add_circle</span>
                                 <span className="hidden sm:inline">Registrar Nueva IC</span>
                                 <span className="sm:hidden">Nueva IC</span>
                             </button>
@@ -217,21 +217,18 @@ const InterconsultasScreen: React.FC = () => {
                                 onClick={() => setViewMode('waiting')}
                                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === 'waiting' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
                             >
-                                <span className="material-symbols-outlined text-base">list</span>
                                 <span>Espera</span>
                             </button>
                             <button 
                                 onClick={() => setViewMode('pcr')}
                                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === 'pcr' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'}`}
                             >
-                                <span className="material-symbols-outlined text-base">emergency</span>
                                 <span>PCR</span>
                             </button>
                             <button 
                                 onClick={() => setViewMode('all')}
                                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === 'all' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
                             >
-                                <span className="material-symbols-outlined text-base">database</span>
                                 <span>Todas</span>
                             </button>
                         </div>
