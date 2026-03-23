@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Interconsultation } from '../types';
@@ -16,6 +15,12 @@ const InterconsultasScreen: React.FC = () => {
         priority: '3',
         status: 'pending'
     });
+
+    // Autocomplete State
+    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [activeSearchField, setActiveSearchField] = useState<'name' | 'hc' | null>(null);
+    const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
     const [viewMode, setViewMode] = useState<'waiting' | 'pcr' | 'all'>('waiting');
 
@@ -82,6 +87,60 @@ const InterconsultasScreen: React.FC = () => {
         } catch (err) {
             console.error('Error lookup patient:', err);
         }
+    };
+
+    const searchPatients = async (query: string, type: 'name' | 'hc') => {
+        if (!query || query.length < 3) {
+            setSuggestions([]);
+            setShowSuggestions(false);
+            return;
+        }
+
+        try {
+            const { data, error } = await supabase
+                .from('patients')
+                .select('name, dob, sex, hc, dni')
+                .ilike(type === 'name' ? 'name' : 'hc', `%${query}%`)
+                .limit(5);
+
+            if (error) throw error;
+            
+            setSuggestions(data || []);
+            setShowSuggestions(true);
+            setActiveSearchField(type);
+        } catch (err) {
+            console.error('Error searching patients:', err);
+        }
+    };
+
+    const handleSearchChange = (field: 'patient_name' | 'hc', value: string) => {
+        handleChange(field, value);
+        
+        if (searchTimeout.current) clearTimeout(searchTimeout.current);
+        
+        searchTimeout.current = setTimeout(() => {
+            searchPatients(value, field === 'patient_name' ? 'name' : 'hc');
+        }, 300);
+    };
+
+    const selectSuggestion = (patient: any) => {
+        let age = undefined;
+        if (patient.dob) {
+            const birthYear = new Date(patient.dob).getFullYear();
+            const currentYear = new Date().getFullYear();
+            age = currentYear - birthYear;
+        }
+        
+        setFormData(prev => ({
+            ...prev,
+            patient_name: patient.name,
+            hc: patient.hc,
+            dni: patient.dni,
+            sex: patient.sex,
+            age: age
+        }));
+        setShowSuggestions(false);
+        setActiveSearchField(null);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -464,9 +523,26 @@ const InterconsultasScreen: React.FC = () => {
 
                             {/* Sección Datos Paciente */}
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <div className="md:col-span-2">
+                                <div className="md:col-span-2 relative">
                                     <label className="label-std">Apellido y Nombre de paciente</label>
-                                    <input required type="text" className="input-std" value={formData.patient_name || ''} onChange={e => handleChange('patient_name', e.target.value)} />
+                                    <input required type="text" className="input-std" value={formData.patient_name || ''} 
+                                        onChange={e => handleSearchChange('patient_name', e.target.value)} 
+                                        onFocus={() => { if (suggestions.length > 0 && (formData.patient_name?.length || 0) >= 3) { setShowSuggestions(true); setActiveSearchField('name'); } }}
+                                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                                    />
+                                    {showSuggestions && activeSearchField === 'name' && suggestions.length > 0 && (
+                                        <ul className="absolute z-50 w-full bg-white border border-slate-200 mt-1 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                                            {suggestions.map((s, i) => (
+                                                <li key={i} onMouseDown={() => selectSuggestion(s)} className="p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0">
+                                                    <div className="font-bold text-slate-800 text-[13px]">{s.name}</div>
+                                                    <div className="text-[10px] text-slate-500 flex gap-3 mt-1 uppercase tracking-wider">
+                                                        <span>HC: {s.hc || '---'}</span>
+                                                        <span>DNI: {s.dni || '---'}</span>
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="label-std">Edad</label>
@@ -480,15 +556,31 @@ const InterconsultasScreen: React.FC = () => {
                                         <option value="F">Femenino</option>
                                     </select>
                                 </div>
-                                <div>
+                                <div className="relative">
                                     <label className="label-std">HC</label>
                                     <input 
                                         type="text" 
                                         className="input-std" 
                                         value={formData.hc || ''} 
-                                        onChange={e => handleChange('hc', e.target.value)}
-                                        onBlur={e => handleLookup('hc', e.target.value)}
+                                        onChange={e => handleSearchChange('hc', e.target.value)}
+                                        onFocus={() => { if (suggestions.length > 0 && (formData.hc?.length || 0) >= 3) { setShowSuggestions(true); setActiveSearchField('hc'); } }}
+                                        onBlur={e => {
+                                            handleLookup('hc', e.target.value);
+                                            setTimeout(() => setShowSuggestions(false), 200);
+                                        }}
                                     />
+                                    {showSuggestions && activeSearchField === 'hc' && suggestions.length > 0 && (
+                                        <ul className="absolute z-50 w-full bg-white border border-slate-200 mt-1 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                                            {suggestions.map((s, i) => (
+                                                <li key={i} onMouseDown={() => selectSuggestion(s)} className="p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0">
+                                                    <div className="font-bold text-slate-800 text-[13px]">{s.name}</div>
+                                                    <div className="text-[10px] text-slate-500 flex gap-3 mt-1 uppercase tracking-wider">
+                                                        <span>HC: {s.hc || '---'}</span>
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
                                 </div>
                                 <div className="md:col-span-1">
                                     <label className="label-std">DNI</label>
