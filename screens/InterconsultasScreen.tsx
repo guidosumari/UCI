@@ -20,6 +20,7 @@ const InterconsultasScreen: React.FC = () => {
     const [suggestions, setSuggestions] = useState<any[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [activeSearchField, setActiveSearchField] = useState<'name' | 'hc' | null>(null);
+    const [isSearching, setIsSearching] = useState(false);
     const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
     const [viewMode, setViewMode] = useState<'waiting' | 'pcr' | 'all'>('waiting');
@@ -90,26 +91,65 @@ const InterconsultasScreen: React.FC = () => {
     };
 
     const searchPatients = async (query: string, type: 'name' | 'hc') => {
-        if (!query || query.length < 3) {
+        if (!query || query.trim().length < 3) {
             setSuggestions([]);
             setShowSuggestions(false);
+            setIsSearching(false);
             return;
         }
 
-        try {
-            const { data, error } = await supabase
-                .from('patients')
-                .select('name, dob, sex, hc, dni')
-                .ilike(type === 'name' ? 'name' : 'hc', `%${query}%`)
-                .limit(5);
+        setIsSearching(true);
+        setShowSuggestions(true);
+        setActiveSearchField(type);
 
-            if (error) throw error;
+        try {
+            const searchCol = type === 'name' ? 'name' : 'hc';
+            const icSearchCol = type === 'name' ? 'patient_name' : 'hc';
+
+            // Query both tables
+            const [patientsRes, icRes] = await Promise.all([
+                supabase.from('patients').select('name, dob, sex, hc, dni').ilike(searchCol, `%${query}%`).limit(8),
+                supabase.from('interconsultations').select('patient_name, age, sex, hc, dni').ilike(icSearchCol, `%${query}%`).order('created_at', { ascending: false }).limit(8)
+            ]);
+
+            const allResults: any[] = [];
             
-            setSuggestions(data || []);
-            setShowSuggestions(true);
-            setActiveSearchField(type);
+            if (patientsRes.data) {
+                patientsRes.data.forEach(p => {
+                    let age = undefined;
+                    if (p.dob) {
+                        const birthYear = new Date(p.dob).getFullYear();
+                        const currentYear = new Date().getFullYear();
+                        age = currentYear - birthYear;
+                    }
+                    allResults.push({ name: p.name, hc: p.hc, dni: p.dni, sex: p.sex, age });
+                });
+            }
+
+            if (icRes.data) {
+                icRes.data.forEach(ic => {
+                    allResults.push({ name: ic.patient_name, hc: ic.hc, dni: ic.dni, sex: ic.sex, age: ic.age });
+                });
+            }
+
+            // Deduplicate by HC or name, prioritize those with HC
+            const patientMap = new Map();
+            allResults.forEach(item => {
+                const key = (item.hc || item.name || '').toLowerCase().trim();
+                if (!key) return;
+                
+                // If we already have this patient, check if the new one has more info
+                if (!patientMap.has(key) || (!patientMap.get(key).hc && item.hc)) {
+                    patientMap.set(key, item);
+                }
+            });
+
+            const uniquePatients = Array.from(patientMap.values()).slice(0, 5);
+            setSuggestions(uniquePatients);
+            setIsSearching(false);
         } catch (err) {
-            console.error('Error searching patients:', err);
+            console.error('Error searching patients across tables:', err);
+            setIsSearching(false);
         }
     };
 
@@ -124,20 +164,13 @@ const InterconsultasScreen: React.FC = () => {
     };
 
     const selectSuggestion = (patient: any) => {
-        let age = undefined;
-        if (patient.dob) {
-            const birthYear = new Date(patient.dob).getFullYear();
-            const currentYear = new Date().getFullYear();
-            age = currentYear - birthYear;
-        }
-        
         setFormData(prev => ({
             ...prev,
             patient_name: patient.name,
             hc: patient.hc,
             dni: patient.dni,
             sex: patient.sex,
-            age: age
+            age: patient.age
         }));
         setShowSuggestions(false);
         setActiveSearchField(null);
@@ -523,24 +556,30 @@ const InterconsultasScreen: React.FC = () => {
 
                             {/* Sección Datos Paciente */}
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <div className="md:col-span-2 relative">
+                                <div className={`md:col-span-2 relative ${showSuggestions && activeSearchField === 'name' ? 'z-50' : ''}`}>
                                     <label className="label-std">Apellido y Nombre de paciente</label>
                                     <input required type="text" className="input-std" value={formData.patient_name || ''} 
                                         onChange={e => handleSearchChange('patient_name', e.target.value)} 
-                                        onFocus={() => { if (suggestions.length > 0 && (formData.patient_name?.length || 0) >= 3) { setShowSuggestions(true); setActiveSearchField('name'); } }}
-                                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                                        onFocus={() => { if ((formData.patient_name?.length || 0) >= 3) { searchPatients(formData.patient_name!, 'name'); } }}
+                                        onBlur={() => setTimeout(() => setShowSuggestions(false), 250)}
                                     />
-                                    {showSuggestions && activeSearchField === 'name' && suggestions.length > 0 && (
-                                        <ul className="absolute z-50 w-full bg-white border border-slate-200 mt-1 rounded-xl shadow-xl max-h-60 overflow-y-auto">
-                                            {suggestions.map((s, i) => (
-                                                <li key={i} onMouseDown={() => selectSuggestion(s)} className="p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0">
-                                                    <div className="font-bold text-slate-800 text-[13px]">{s.name}</div>
-                                                    <div className="text-[10px] text-slate-500 flex gap-3 mt-1 uppercase tracking-wider">
-                                                        <span>HC: {s.hc || '---'}</span>
-                                                        <span>DNI: {s.dni || '---'}</span>
-                                                    </div>
-                                                </li>
-                                            ))}
+                                    {showSuggestions && activeSearchField === 'name' && (
+                                        <ul className="absolute z-[60] w-full bg-white border border-slate-200 mt-1 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+                                            {isSearching ? (
+                                                <li className="p-4 text-center text-slate-400 text-xs italic">Buscando...</li>
+                                            ) : suggestions.length === 0 ? (
+                                                <li className="p-4 text-center text-slate-400 text-xs italic">No se encontraron pacientes</li>
+                                            ) : (
+                                                suggestions.map((s, i) => (
+                                                    <li key={i} onMouseDown={() => selectSuggestion(s)} className="p-3 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 transition-colors">
+                                                        <div className="font-bold text-slate-800 text-[13px]">{s.name}</div>
+                                                        <div className="text-[10px] text-slate-500 flex gap-3 mt-1 uppercase tracking-wider">
+                                                            <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">HC: {s.hc || '---'}</span>
+                                                            <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">DNI: {s.dni || '---'}</span>
+                                                        </div>
+                                                    </li>
+                                                ))
+                                            )}
                                         </ul>
                                     )}
                                 </div>
@@ -556,29 +595,35 @@ const InterconsultasScreen: React.FC = () => {
                                         <option value="F">Femenino</option>
                                     </select>
                                 </div>
-                                <div className="relative">
+                                <div className={`relative ${showSuggestions && activeSearchField === 'hc' ? 'z-50' : ''}`}>
                                     <label className="label-std">HC</label>
                                     <input 
                                         type="text" 
                                         className="input-std" 
                                         value={formData.hc || ''} 
                                         onChange={e => handleSearchChange('hc', e.target.value)}
-                                        onFocus={() => { if (suggestions.length > 0 && (formData.hc?.length || 0) >= 3) { setShowSuggestions(true); setActiveSearchField('hc'); } }}
+                                        onFocus={() => { if ((formData.hc?.length || 0) >= 3) { searchPatients(formData.hc!, 'hc'); } }}
                                         onBlur={e => {
                                             handleLookup('hc', e.target.value);
-                                            setTimeout(() => setShowSuggestions(false), 200);
+                                            setTimeout(() => setShowSuggestions(false), 250);
                                         }}
                                     />
-                                    {showSuggestions && activeSearchField === 'hc' && suggestions.length > 0 && (
-                                        <ul className="absolute z-50 w-full bg-white border border-slate-200 mt-1 rounded-xl shadow-xl max-h-60 overflow-y-auto">
-                                            {suggestions.map((s, i) => (
-                                                <li key={i} onMouseDown={() => selectSuggestion(s)} className="p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0">
-                                                    <div className="font-bold text-slate-800 text-[13px]">{s.name}</div>
-                                                    <div className="text-[10px] text-slate-500 flex gap-3 mt-1 uppercase tracking-wider">
-                                                        <span>HC: {s.hc || '---'}</span>
-                                                    </div>
-                                                </li>
-                                            ))}
+                                    {showSuggestions && activeSearchField === 'hc' && (
+                                        <ul className="absolute z-[60] w-full bg-white border border-slate-200 mt-1 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+                                            {isSearching ? (
+                                                <li className="p-4 text-center text-slate-400 text-xs italic">Buscando...</li>
+                                            ) : suggestions.length === 0 ? (
+                                                <li className="p-4 text-center text-slate-400 text-xs italic">No se encontraron pacientes</li>
+                                            ) : (
+                                                suggestions.map((s, i) => (
+                                                    <li key={i} onMouseDown={() => selectSuggestion(s)} className="p-3 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 transition-colors">
+                                                        <div className="font-bold text-slate-800 text-[13px]">{s.name}</div>
+                                                        <div className="text-[10px] text-slate-500 flex gap-3 mt-1 uppercase tracking-wider">
+                                                            <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">HC: {s.hc || '---'}</span>
+                                                        </div>
+                                                    </li>
+                                                ))
+                                            )}
                                         </ul>
                                     )}
                                 </div>
