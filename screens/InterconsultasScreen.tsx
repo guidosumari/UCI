@@ -91,7 +91,8 @@ const InterconsultasScreen: React.FC = () => {
     };
 
     const searchPatients = async (query: string, type: 'name' | 'hc') => {
-        if (!query || query.trim().length < 3) {
+        const cleanQuery = query.trim();
+        if (!cleanQuery || cleanQuery.length < 3) {
             setSuggestions([]);
             setShowSuggestions(false);
             setIsSearching(false);
@@ -103,13 +104,20 @@ const InterconsultasScreen: React.FC = () => {
         setActiveSearchField(type);
 
         try {
-            const searchCol = type === 'name' ? 'name' : 'hc';
-            const icSearchCol = type === 'name' ? 'patient_name' : 'hc';
-
-            // Query both tables
+            const queryStr = `%${cleanQuery}%`;
+            
+            // Global search in both tables for maximum flexibility
+            // We search in all relevant columns: name/patient_name, hc, and dni
             const [patientsRes, icRes] = await Promise.all([
-                supabase.from('patients').select('name, dob, sex, hc, dni').ilike(searchCol, `%${query}%`).limit(8),
-                supabase.from('interconsultations').select('patient_name, age, sex, hc, dni').ilike(icSearchCol, `%${query}%`).order('created_at', { ascending: false }).limit(8)
+                supabase.from('patients')
+                    .select('name, dob, sex, hc, dni')
+                    .or(`name.ilike.${queryStr},hc.ilike.${queryStr},dni.ilike.${queryStr}`)
+                    .limit(10),
+                supabase.from('interconsultations')
+                    .select('patient_name, age, sex, hc, dni')
+                    .or(`patient_name.ilike.${queryStr},hc.ilike.${queryStr},dni.ilike.${queryStr}`)
+                    .order('created_at', { ascending: false })
+                    .limit(10)
             ]);
 
             const allResults: any[] = [];
@@ -132,14 +140,14 @@ const InterconsultasScreen: React.FC = () => {
                 });
             }
 
-            // Deduplicate by HC or name, prioritize those with HC
+            // Deduplicate by HC primarily, then by Name
             const patientMap = new Map();
             allResults.forEach(item => {
-                const key = (item.hc || item.name || '').toLowerCase().trim();
-                if (!key) return;
+                const hcKey = item.hc ? `HC:${item.hc.trim()}` : null;
+                const nameKey = item.name ? `NAME:${item.name.toLowerCase().trim()}` : null;
+                const key = hcKey || nameKey;
                 
-                // If we already have this patient, check if the new one has more info
-                if (!patientMap.has(key) || (!patientMap.get(key).hc && item.hc)) {
+                if (key && (!patientMap.has(key) || (!patientMap.get(key).hc && item.hc))) {
                     patientMap.set(key, item);
                 }
             });
@@ -148,7 +156,7 @@ const InterconsultasScreen: React.FC = () => {
             setSuggestions(uniquePatients);
             setIsSearching(false);
         } catch (err) {
-            console.error('Error searching patients across tables:', err);
+            console.error('Error searching patients:', err);
             setIsSearching(false);
         }
     };
