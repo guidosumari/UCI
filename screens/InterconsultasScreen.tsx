@@ -105,13 +105,32 @@ const InterconsultasScreen: React.FC = () => {
 
         const searchTimeout = setTimeout(() => {
             setIsSearching(false);
-        }, 10000); // 10s safety timeout
+        }, 8000);
 
         try {
             const allResults: any[] = [];
+            
+            // 1. FIRST: Search in local state (Interconsultations already loaded)
+            const localMatches = interconsultations.filter(ic => 
+                (ic.patient_name?.toLowerCase().includes(query.toLowerCase())) ||
+                (ic.hc?.toLowerCase().includes(query.toLowerCase())) ||
+                (ic.dni?.toLowerCase().includes(query.toLowerCase()))
+            );
+            
+            localMatches.forEach(ic => {
+                allResults.push({ 
+                    name: ic.patient_name, 
+                    hc: ic.hc, 
+                    dni: ic.dni, 
+                    sex: ic.sex, 
+                    age: ic.age,
+                    source: 'local'
+                });
+            });
+
             const term = `%${query}%`;
 
-            // Try Patients Table
+            // 2. REMOTE: Try Patients Table
             try {
                 const { data, error } = await supabase
                     .from('patients')
@@ -119,8 +138,7 @@ const InterconsultasScreen: React.FC = () => {
                     .or(`name.ilike.${term},hc.ilike.${term},dni.ilike.${term}`)
                     .limit(10);
                 
-                if (error) throw error;
-                if (data) {
+                if (!error && data) {
                     data.forEach(p => {
                         let age = undefined;
                         if (p.dob) {
@@ -128,14 +146,12 @@ const InterconsultasScreen: React.FC = () => {
                             const currentYear = new Date().getFullYear();
                             age = currentYear - birthYear;
                         }
-                        allResults.push({ name: p.name, hc: p.hc, dni: p.dni, sex: p.sex, age });
+                        allResults.push({ name: p.name, hc: p.hc, dni: p.dni, sex: p.sex, age, source: 'patients' });
                     });
                 }
-            } catch (err: any) {
-                console.error('Error in Patients search:', err);
-            }
+            } catch (err) {}
 
-            // Try Interconsultations Table
+            // 3. REMOTE: Try Interconsultations Table (Extended Search)
             try {
                 const { data, error } = await supabase
                     .from('interconsultations')
@@ -144,29 +160,18 @@ const InterconsultasScreen: React.FC = () => {
                     .order('created_at', { ascending: false })
                     .limit(10);
                 
-                if (error) throw error;
-                if (data) {
+                if (!error && data) {
                     data.forEach(ic => {
-                        allResults.push({ name: ic.patient_name, hc: ic.hc, dni: ic.dni, sex: ic.sex, age: ic.age });
+                        allResults.push({ name: ic.patient_name, hc: ic.hc, dni: ic.dni, sex: ic.sex, age: ic.age, source: 'remote_ic' });
                     });
                 }
-            } catch (err: any) {
-                console.error('Error in IC search:', err);
-            }
+            } catch (err) {}
 
-            // Fallback: Try exact match if no results yet and it looks like an HC
+            // Fallback: Exact match for numbers
             if (allResults.length === 0 && /^\d+$/.test(query)) {
                 try {
-                    const { data } = await supabase
-                        .from('interconsultations')
-                        .select('patient_name, age, sex, hc, dni')
-                        .eq('hc', query)
-                        .limit(1);
-                    if (data && data.length > 0) {
-                        data.forEach(ic => {
-                            allResults.push({ name: ic.patient_name, hc: ic.hc, dni: ic.dni, sex: ic.sex, age: ic.age });
-                        });
-                    }
+                    const { data } = await supabase.from('interconsultations').select('patient_name, age, sex, hc, dni').eq('hc', query).limit(1);
+                    if (data) data.forEach(ic => allResults.push({ name: ic.patient_name, hc: ic.hc, dni: ic.dni, sex: ic.sex, age: ic.age, source: 'exact' }));
                 } catch (e) {}
             }
 
@@ -185,8 +190,7 @@ const InterconsultasScreen: React.FC = () => {
             setIsSearching(false);
             clearTimeout(searchTimeout);
         } catch (err: any) {
-            console.error('Search aborted:', err);
-            alert('Error en búsqueda: ' + (err.message || err));
+            console.error('Search error:', err);
             setIsSearching(false);
             clearTimeout(searchTimeout);
         }
@@ -607,11 +611,16 @@ const InterconsultasScreen: React.FC = () => {
                                             {isSearching ? (
                                                 <li className="p-4 text-center text-slate-400 text-xs italic">Buscando...</li>
                                             ) : suggestions.length === 0 ? (
-                                                <li className="p-4 text-center text-slate-400 text-xs italic">No se encontraron pacientes</li>
+                                                <li className="p-4 text-center text-slate-400 text-[11px] italic">No se encontraron coincidencias exactas</li>
                                             ) : (
                                                 suggestions.map((s, i) => (
                                                     <li key={i} onMouseDown={() => selectSuggestion(s)} className="p-3 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 transition-colors">
-                                                        <div className="font-bold text-slate-800 text-[13px]">{s.name}</div>
+                                                        <div className="flex justify-between items-start">
+                                                            <div className="font-bold text-slate-800 text-[13px]">{s.name}</div>
+                                                            {interconsultations.some(ic => ic.status === 'pending' && (ic.hc === s.hc || ic.dni === s.dni)) && (
+                                                                <span className="text-[9px] bg-amber-100 text-amber-700 font-black px-1.5 py-0.5 rounded uppercase">Pendiente</span>
+                                                            )}
+                                                        </div>
                                                         <div className="text-[10px] text-slate-500 flex gap-3 mt-1 uppercase tracking-wider">
                                                             <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">HC: {s.hc || '---'}</span>
                                                             <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">DNI: {s.dni || '---'}</span>
@@ -652,11 +661,16 @@ const InterconsultasScreen: React.FC = () => {
                                             {isSearching ? (
                                                 <li className="p-4 text-center text-slate-400 text-xs italic">Buscando...</li>
                                             ) : suggestions.length === 0 ? (
-                                                <li className="p-4 text-center text-slate-400 text-xs italic">No se encontraron pacientes</li>
+                                                <li className="p-4 text-center text-slate-400 text-[11px] italic">No se encontraron coincidencias exactas</li>
                                             ) : (
                                                 suggestions.map((s, i) => (
                                                     <li key={i} onMouseDown={() => selectSuggestion(s)} className="p-3 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 transition-colors">
-                                                        <div className="font-bold text-slate-800 text-[13px]">{s.name}</div>
+                                                        <div className="flex justify-between items-start">
+                                                            <div className="font-bold text-slate-800 text-[13px]">{s.name}</div>
+                                                            {interconsultations.some(ic => ic.status === 'pending' && (ic.hc === s.hc || ic.dni === s.dni)) && (
+                                                                <span className="text-[9px] bg-amber-100 text-amber-700 font-black px-1.5 py-0.5 rounded uppercase">Pendiente</span>
+                                                            )}
+                                                        </div>
                                                         <div className="text-[10px] text-slate-500 flex gap-3 mt-1 uppercase tracking-wider">
                                                             <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">HC: {s.hc || '---'}</span>
                                                         </div>
