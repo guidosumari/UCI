@@ -90,9 +90,9 @@ const InterconsultasScreen: React.FC = () => {
         }
     };
 
-    const searchPatients = async (query: string, type: 'name' | 'hc') => {
-        const cleanQuery = query.trim();
-        if (!cleanQuery || cleanQuery.length < 3) {
+    const searchPatients = async (queryStr: string, type: 'name' | 'hc') => {
+        const query = queryStr.trim();
+        if (!query || query.length < 3) {
             setSuggestions([]);
             setShowSuggestions(false);
             setIsSearching(false);
@@ -103,61 +103,92 @@ const InterconsultasScreen: React.FC = () => {
         setShowSuggestions(true);
         setActiveSearchField(type);
 
+        const searchTimeout = setTimeout(() => {
+            setIsSearching(false);
+        }, 10000); // 10s safety timeout
+
         try {
-            const queryStr = `%${cleanQuery}%`;
-            
-            // Global search in both tables for maximum flexibility
-            // We search in all relevant columns: name/patient_name, hc, and dni
-            const [patientsRes, icRes] = await Promise.all([
-                supabase.from('patients')
-                    .select('name, dob, sex, hc, dni')
-                    .or(`name.ilike.${queryStr},hc.ilike.${queryStr},dni.ilike.${queryStr}`)
-                    .limit(10),
-                supabase.from('interconsultations')
-                    .select('patient_name, age, sex, hc, dni')
-                    .or(`patient_name.ilike.${queryStr},hc.ilike.${queryStr},dni.ilike.${queryStr}`)
-                    .order('created_at', { ascending: false })
-                    .limit(10)
-            ]);
-
             const allResults: any[] = [];
-            
-            if (patientsRes.data) {
-                patientsRes.data.forEach(p => {
-                    let age = undefined;
-                    if (p.dob) {
-                        const birthYear = new Date(p.dob).getFullYear();
-                        const currentYear = new Date().getFullYear();
-                        age = currentYear - birthYear;
+            const term = `%${query}%`;
+
+            // Try Patients Table
+            try {
+                const { data, error } = await supabase
+                    .from('patients')
+                    .select('name, dob, sex, hc, dni')
+                    .or(`name.ilike.${term},hc.ilike.${term},dni.ilike.${term}`)
+                    .limit(10);
+                
+                if (error) throw error;
+                if (data) {
+                    data.forEach(p => {
+                        let age = undefined;
+                        if (p.dob) {
+                            const birthYear = new Date(p.dob).getFullYear();
+                            const currentYear = new Date().getFullYear();
+                            age = currentYear - birthYear;
+                        }
+                        allResults.push({ name: p.name, hc: p.hc, dni: p.dni, sex: p.sex, age });
+                    });
+                }
+            } catch (err: any) {
+                console.error('Error in Patients search:', err);
+            }
+
+            // Try Interconsultations Table
+            try {
+                const { data, error } = await supabase
+                    .from('interconsultations')
+                    .select('patient_name, age, sex, hc, dni')
+                    .or(`patient_name.ilike.${term},hc.ilike.${term},dni.ilike.${term}`)
+                    .order('created_at', { ascending: false })
+                    .limit(10);
+                
+                if (error) throw error;
+                if (data) {
+                    data.forEach(ic => {
+                        allResults.push({ name: ic.patient_name, hc: ic.hc, dni: ic.dni, sex: ic.sex, age: ic.age });
+                    });
+                }
+            } catch (err: any) {
+                console.error('Error in IC search:', err);
+            }
+
+            // Fallback: Try exact match if no results yet and it looks like an HC
+            if (allResults.length === 0 && /^\d+$/.test(query)) {
+                try {
+                    const { data } = await supabase
+                        .from('interconsultations')
+                        .select('patient_name, age, sex, hc, dni')
+                        .eq('hc', query)
+                        .limit(1);
+                    if (data && data.length > 0) {
+                        data.forEach(ic => {
+                            allResults.push({ name: ic.patient_name, hc: ic.hc, dni: ic.dni, sex: ic.sex, age: ic.age });
+                        });
                     }
-                    allResults.push({ name: p.name, hc: p.hc, dni: p.dni, sex: p.sex, age });
-                });
+                } catch (e) {}
             }
 
-            if (icRes.data) {
-                icRes.data.forEach(ic => {
-                    allResults.push({ name: ic.patient_name, hc: ic.hc, dni: ic.dni, sex: ic.sex, age: ic.age });
-                });
-            }
-
-            // Deduplicate by HC primarily, then by Name
+            // Deduplicate
             const patientMap = new Map();
             allResults.forEach(item => {
-                const hcKey = item.hc ? `HC:${item.hc.trim()}` : null;
-                const nameKey = item.name ? `NAME:${item.name.toLowerCase().trim()}` : null;
-                const key = hcKey || nameKey;
-                
-                if (key && (!patientMap.has(key) || (!patientMap.get(key).hc && item.hc))) {
+                const key = (item.hc || item.dni || item.name || '').toString().toLowerCase().trim();
+                if (!key) return;
+                if (!patientMap.has(key) || (!patientMap.get(key).hc && item.hc)) {
                     patientMap.set(key, item);
                 }
             });
 
-            const uniquePatients = Array.from(patientMap.values()).slice(0, 5);
-            setSuggestions(uniquePatients);
+            const uniqueResults = Array.from(patientMap.values()).slice(0, 5);
+            setSuggestions(uniqueResults);
             setIsSearching(false);
-        } catch (err) {
-            console.error('Error searching patients:', err);
+            clearTimeout(searchTimeout);
+        } catch (err: any) {
+            console.error('Search aborted:', err);
+            alert('Error en búsqueda: ' + (err.message || err));
             setIsSearching(false);
+            clearTimeout(searchTimeout);
         }
     };
 
