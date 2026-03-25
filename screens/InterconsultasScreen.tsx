@@ -732,7 +732,7 @@ const InterconsultasScreen: React.FC = () => {
                                     <option value="procedimiento">Procedimiento</option>
                                     <option value="pcr">PCR</option>
                                     <option value="ustna">USTNA</option>
-                                    <option value="evaluacion_sugerencias">Evaluación y Sugerencias</option>
+                                    <option value="evaluacion_pase">Evaluación y Sugerencias</option>
                                 </select>
                             </div>
 
