@@ -51,7 +51,7 @@ export interface Interconsultation {
   hc: string;
   service_origin: string;
   bed_number: string;
-  reason: 'procedimiento' | 'evaluacion_pase' | 'pcr' | 'ustna';
+  reason: 'procedimiento' | 'evaluacion_pase' | 'pcr' | 'ustna' | 'evaluacion_sugerencias';
   procedure_type?: 'cvc' | 'intubacion';
   cvc_location?: string;
   cvc_attempts?: number;

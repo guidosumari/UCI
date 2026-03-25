@@ -52,7 +52,13 @@ const InterconsultasScreen: React.FC = () => {
     };
 
     const handleEdit = (ic: Interconsultation) => {
-        setFormData(ic);
+        let editedIc = { ...ic };
+        // Reverse soft-mapping for display in the form
+        if (ic.reason === 'evaluacion_pase' && ic.health_problem_1?.startsWith('(SUG) ')) {
+            editedIc.reason = 'evaluacion_sugerencias';
+            editedIc.health_problem_1 = ic.health_problem_1.substring(6);
+        }
+        setFormData(editedIc);
         setShowModal(true);
     };
 
@@ -225,8 +231,11 @@ const InterconsultasScreen: React.FC = () => {
             const { dni, ...cleanFormData } = formData;
             const payload = {
                 ...cleanFormData,
-                // Map evaluacion_sugerencias to evaluacion_pase to avoid DB constraint error
+                // Soft-mapping: evaluacion_sugerencias -> evaluacion_pase + prefix
                 reason: formData.reason === 'evaluacion_sugerencias' ? 'evaluacion_pase' : formData.reason,
+                health_problem_1: formData.reason === 'evaluacion_sugerencias' 
+                    ? `(SUG) ${formData.health_problem_1 || ''}`
+                    : formData.health_problem_1,
                 // Ensure numeric fields are numbers
                 age: formData.age ? Number(formData.age) : undefined,
                 cvc_attempts: formData.cvc_attempts ? Number(formData.cvc_attempts) : undefined
@@ -455,7 +464,7 @@ const InterconsultasScreen: React.FC = () => {
                                                     {ic.health_problem_1 && (
                                                         <div className="text-[10px] font-bold text-slate-600 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded flex items-center gap-1">
                                                             <span className="size-1 rounded-full bg-indigo-400"></span>
-                                                            {ic.health_problem_1}
+                                                            {ic.health_problem_1.startsWith('(SUG) ') ? ic.health_problem_1.substring(6) : ic.health_problem_1}
                                                         </div>
                                                     )}
                                                     {ic.health_problem_2 && (
@@ -471,7 +480,9 @@ const InterconsultasScreen: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 <span className="inline-block px-2 py-1 rounded border border-slate-200 bg-white text-xs font-bold text-slate-600 uppercase tracking-tight">
-                                                    {ic.reason?.replace('_', ' ')}
+                                                    {ic.reason === 'evaluacion_pase' && ic.health_problem_1?.startsWith('(SUG) ') 
+                                                        ? 'Evaluación y Sugerencias' 
+                                                        : ic.reason?.replace('_', ' ')}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-center">
@@ -549,7 +560,7 @@ const InterconsultasScreen: React.FC = () => {
                                         {ic.health_problem_1 && (
                                             <div className="flex items-start gap-2 text-[11px] font-bold text-slate-600">
                                                 <span className="size-1.5 rounded-full bg-indigo-500 mt-1 shrink-0"></span>
-                                                <span className="italic">{ic.health_problem_1}</span>
+                                                <span className="italic">{ic.health_problem_1.startsWith('(SUG) ') ? ic.health_problem_1.substring(6) : ic.health_problem_1}</span>
                                             </div>
                                         )}
                                         {ic.health_problem_2 && (
@@ -566,9 +577,11 @@ const InterconsultasScreen: React.FC = () => {
                                         <div className="size-6 rounded-full bg-indigo-100 flex items-center justify-center">
                                             <span className="material-symbols-outlined text-xs text-indigo-600">info</span>
                                         </div>
-                                        <div className="text-[10px] font-black text-indigo-700 uppercase tracking-tight">
-                                            {ic.reason?.replace('_', ' ')}
-                                        </div>
+                                         <div className="text-[10px] font-black text-indigo-700 uppercase tracking-tight">
+                                             {ic.reason === 'evaluacion_pase' && ic.health_problem_1?.startsWith('(SUG) ') 
+                                                 ? 'Evaluación y Sugerencias' 
+                                                 : ic.reason?.replace('_', ' ')}
+                                         </div>
                                     </div>
                                     {ic.responders && (
                                         <div className="flex items-center gap-1.5 text-[9px] font-bold text-slate-400 uppercase">
