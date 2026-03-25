@@ -225,6 +225,8 @@ const InterconsultasScreen: React.FC = () => {
             const { dni, ...cleanFormData } = formData;
             const payload = {
                 ...cleanFormData,
+                // Map evaluacion_sugerencias to evaluacion_pase to avoid DB constraint error
+                reason: formData.reason === 'evaluacion_sugerencias' ? 'evaluacion_pase' : formData.reason,
                 // Ensure numeric fields are numbers
                 age: formData.age ? Number(formData.age) : undefined,
                 cvc_attempts: formData.cvc_attempts ? Number(formData.cvc_attempts) : undefined
@@ -732,7 +734,7 @@ const InterconsultasScreen: React.FC = () => {
                                     <option value="procedimiento">Procedimiento</option>
                                     <option value="pcr">PCR</option>
                                     <option value="ustna">USTNA</option>
-                                    <option value="evaluacion_pase">Evaluación y Sugerencias</option>
+                                    <option value="evaluacion_sugerencias">Evaluación y Sugerencias</option>
                                 </select>
                             </div>
 
