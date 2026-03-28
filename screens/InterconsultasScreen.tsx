@@ -1,7 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Interconsultation } from '../types';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+const DOCTORS = [
+    'Dr Geng', 'Dr Solorzano', 'Dr Ramirez', 'Dr Cruz', 'Dr Diaz', 
+    'Dr Linares', 'Dr Sumari', 'Dr Palacios', 'Dra Quiñones', 
+    'Dr Palma', 'Dr Becerra'
+];
 
 const InterconsultasScreen: React.FC = () => {
     const navigate = useNavigate();
@@ -12,7 +20,7 @@ const InterconsultasScreen: React.FC = () => {
     // Form State
     const [formData, setFormData] = useState<Partial<Interconsultation>>({
         reason: 'evaluacion_pase',
-        priority: '3',
+        priority: undefined,
         status: 'pending'
     });
 
@@ -24,6 +32,17 @@ const InterconsultasScreen: React.FC = () => {
     const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
     const [viewMode, setViewMode] = useState<'waiting' | 'pcr' | 'all'>('waiting');
+    const [expandedPatients, setExpandedPatients] = useState<Set<string>>(new Set());
+
+    const togglePatientExpansion = (patientId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setExpandedPatients(prev => {
+            const next = new Set(prev);
+            if (next.has(patientId)) next.delete(patientId);
+            else next.add(patientId);
+            return next;
+        });
+    };
 
     useEffect(() => {
         fetchInterconsultations();
@@ -44,7 +63,7 @@ const InterconsultasScreen: React.FC = () => {
     const handleNew = () => {
         setFormData({
             reason: viewMode === 'pcr' ? 'pcr' : 'evaluacion_pase',
-            priority: viewMode === 'pcr' ? '1' : '3',
+            priority: viewMode === 'pcr' ? '1' : undefined,
             status: 'pending',
             dni: ''
         });
@@ -52,12 +71,20 @@ const InterconsultasScreen: React.FC = () => {
     };
 
     const handleEdit = (ic: Interconsultation) => {
-        let editedIc = { ...ic };
+        let editedIc: any = { ...ic };
         // Reverse soft-mapping for display in the form
         if (ic.reason === 'evaluacion_pase' && ic.health_problem_1?.startsWith('(SUG) ')) {
             editedIc.reason = 'evaluacion_sugerencias';
             editedIc.health_problem_1 = ic.health_problem_1.substring(6);
         }
+
+        // Split cvc_operators if it exists
+        if (ic.cvc_operators && ic.procedure_type === 'cvc') {
+            const parts = ic.cvc_operators.split(' / ');
+            editedIc.cvc_assistant = parts[0] || '';
+            editedIc.cvc_resident = parts[1] || '';
+        }
+
         setFormData(editedIc);
         setShowModal(true);
     };
@@ -225,6 +252,97 @@ const InterconsultasScreen: React.FC = () => {
         setActiveSearchField(null);
     };
 
+    const generateReport = () => {
+        const doc = new jsPDF({ orientation: 'landscape' });
+        
+        // Filter last 5 days
+        const fiveDaysAgo = new Date();
+        fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+        fiveDaysAgo.setHours(0, 0, 0, 0);
+        
+        const filteredData = interconsultations
+            .filter(ic => {
+                const icDate = new Date(ic.created_at || '');
+                return icDate >= fiveDaysAgo && ic.status === 'pending' && (ic.priority !== null && ic.priority !== undefined && ic.priority !== '');
+            })
+            .sort((a, b) => {
+                // Secondary sort: Priority (1, 2, 3)
+                const pA = a.priority || '9';
+                const pB = b.priority || '9';
+                
+                // Primary sort: Date (Newest first)
+                const dateA = new Date(a.created_at || '').getTime();
+                const dateB = new Date(b.created_at || '').getTime();
+                
+                if (dateB !== dateA) return dateB - dateA;
+                return pA.localeCompare(pB);
+            });
+
+        // Add Header
+        doc.setFontSize(18);
+        doc.text('Lista de Espera UCI - Últimos 5 Días', 14, 20);
+        doc.setFontSize(10);
+        doc.text(`Generado el: ${new Date().toLocaleString()}`, 14, 28);
+
+        // Prepare Table Data
+        const tableBody = filteredData.map(ic => [
+            new Date(ic.created_at || '').toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            ic.responders || '---',
+            `${ic.patient_name}\n(${ic.age}a, ${ic.sex})`,
+            `${ic.hc || '---'}\n${ic.service_origin || '---'} (C-${ic.bed_number || '?'})`,
+            `${ic.health_problem_1 || ''}\n${ic.health_problem_2 || ''}`,
+            `Prioridad ${ic.priority}`
+        ]);
+
+        autoTable(doc, {
+            startY: 35,
+            head: [['Fecha/Hora', 'Médico Evaluador', 'Paciente', 'HC / Servicio', 'Problemas de Salud', 'Prioridad']],
+            body: tableBody,
+            theme: 'striped',
+            headStyles: { fillColor: [63, 81, 181] },
+            styles: { fontSize: 8, cellPadding: 3 },
+            columnStyles: {
+                0: { cellWidth: 30 },
+                1: { cellWidth: 35 },
+                2: { cellWidth: 50 },
+                3: { cellWidth: 40 },
+                5: { cellWidth: 25, fontStyle: 'bold' }
+            }
+        });
+
+        doc.save(`Lista_Espera_UCI_${new Date().toISOString().split('T')[0]}.pdf`);
+    };
+
+    const groupedInterconsultations = useMemo(() => {
+        const groups: { [key: string]: Interconsultation[] } = {};
+
+        // 1. Group by HC or Patient Name
+        interconsultations.forEach(ic => {
+            const key = ic.hc || ic.patient_name;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(ic);
+        });
+
+        // 2. Sort within each group (latest first)
+        Object.keys(groups).forEach(key => {
+            groups[key].sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
+        });
+
+        // 3. Convert to array and sort groups by their latest IC's date
+        return Object.entries(groups)
+            .map(([groupId, items]) => ({
+                id: groupId,
+                latest: items[0],
+                history: items.slice(1),
+                total: items.length
+            }))
+            .sort((a, b) => {
+                const dateA = new Date(a.latest.created_at || '').getTime();
+                const dateB = new Date(b.latest.created_at || '').getTime();
+                return dateB - dateA;
+            });
+    }, [interconsultations]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
@@ -236,6 +354,10 @@ const InterconsultasScreen: React.FC = () => {
                 health_problem_1: formData.reason === 'evaluacion_sugerencias' 
                     ? `(SUG) ${formData.health_problem_1 || ''}`
                     : formData.health_problem_1,
+                // Combine CVC operators if needed
+                cvc_operators: formData.reason === 'procedimiento' && formData.procedure_type === 'cvc'
+                    ? `${(formData as any).cvc_assistant || ''} / ${(formData as any).cvc_resident || ''}`
+                    : formData.cvc_operators,
                 // Ensure numeric fields are numbers
                 age: formData.age ? Number(formData.age) : undefined,
                 cvc_attempts: formData.cvc_attempts ? Number(formData.cvc_attempts) : undefined
@@ -310,6 +432,12 @@ const InterconsultasScreen: React.FC = () => {
                     newState.status = 'pending';
                 }
             }
+            if (field === 'reason' && value === 'procedimiento') {
+                newState.procedure_type = undefined;
+            }
+            if (field === 'reason' && value === 'evaluacion_sugerencias') {
+                newState.priority = undefined;
+            }
             return newState;
         });
     };
@@ -323,7 +451,10 @@ const InterconsultasScreen: React.FC = () => {
                     <div className="flex items-center justify-between py-3 gap-3">
                         <div className="flex items-center gap-2 md:gap-3 cursor-pointer min-w-0" onClick={() => navigate('/')}>
                             <div className="flex items-center justify-center size-9 md:size-10 rounded-xl bg-indigo-600 shadow-sm text-white shrink-0">
-                                <span className="material-symbols-outlined text-xl md:text-2xl filled hidden sm:inline-block">arrow_back</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="size-5 hidden sm:inline-block">
+                                    <line x1="19" y1="12" x2="5" y2="12" />
+                                    <polyline points="12 19 5 12 12 5" />
+                                </svg>
                                 <span className="sm:hidden font-black text-lg">{'<'}</span>
                             </div>
                             <div className="truncate">
@@ -339,6 +470,22 @@ const InterconsultasScreen: React.FC = () => {
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
+                            {viewMode === 'waiting' && (
+                                <button
+                                    onClick={generateReport}
+                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all shadow-md hover:shadow-indigo-500/20 active:scale-95 group"
+                                    title="Descargar Reporte PDF de los últimos 5 días"
+                                >
+                                    <div className="flex items-center gap-2 group-hover:translate-x-1 transition-transform">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="size-3.5">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                            <polyline points="7 10 12 15 17 10" />
+                                            <line x1="12" y1="15" x2="12" y2="3" />
+                                        </svg>
+                                        <span className="inline-block">Reporte PDF</span>
+                                    </div>
+                                </button>
+                            )}
                             {/* Desktop View Modes */}
                             <div className="hidden lg:flex bg-slate-100 p-1 rounded-xl border border-slate-200 mr-2">
                                 <button onClick={() => setViewMode('waiting')} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${viewMode === 'waiting' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Espera</button>
@@ -389,109 +536,203 @@ const InterconsultasScreen: React.FC = () => {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-slate-50 border-b border-slate-200">
-                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Paciente</th>
-                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Edad/Sexo</th>
-                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Prioridad</th>
-                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Origen</th>
-                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Problemas</th>
-                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Motivo</th>
-                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Médico</th>
-                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Estado</th>
+                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider w-[240px]">Paciente</th>
+                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-24">Edad/Sexo</th>
+                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-24">Prioridad</th>
+                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider w-40">Origen</th>
+                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center min-w-[320px]">Problemas</th>
+                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-36">Motivo</th>
+                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-32">Médico</th>
+                                    <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-28">Estado</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {loading ? (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-8 text-center text-slate-500 animate-pulse">Cargando lista de espera...</td>
+                                        <td colSpan={9} className="px-6 py-8 text-center text-slate-500 animate-pulse">Cargando lista de espera...</td>
                                     </tr>
-                                ) : interconsultations.filter(ic => {
-                                        if (viewMode === 'waiting') return ic.status === 'pending';
-                                        if (viewMode === 'pcr') return ic.reason === 'pcr';
-                                        return true;
-                                    }).length === 0 ? (
-                                    <tr>
-                                        <td colSpan={6} className="px-6 py-12 text-center">
-                                            <div className="flex flex-col items-center justify-center text-slate-400">
-                                                <span className="material-symbols-outlined text-4xl mb-2">
-                                                    {viewMode === 'waiting' ? 'assignment_add' : 'emergency'}
-                                                </span>
-                                                <p className="font-medium">
-                                                    {viewMode === 'waiting' ? 'No hay pacientes en lista de espera' : 
-                                                     viewMode === 'pcr' ? 'No hay pacientes PCR registrados' : 
-                                                     'No hay interconsultas registradas'}
-                                                </p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    interconsultations
-                                        .filter(ic => {
-                                            if (viewMode === 'waiting') return ic.status === 'pending';
+                                ) : (viewMode === 'waiting' || viewMode === 'pcr') ? (
+                                    groupedInterconsultations
+                                        .filter(group => {
+                                            const ic = group.latest;
+                                            const hasPriority = ic.priority !== null && ic.priority !== undefined && ic.priority !== '';
+                                            if (viewMode === 'waiting') return ic.status === 'pending' && hasPriority;
                                             if (viewMode === 'pcr') return ic.reason === 'pcr';
                                             return true;
                                         })
-                                        .map((ic) => (
+                                        .length === 0 ? (
+                                        <tr>
+                                            <td colSpan={9} className="px-6 py-12 text-center text-slate-400">No hay pacientes que coincidan</td>
+                                        </tr>
+                                    ) : (
+                                        groupedInterconsultations
+                                            .filter(group => {
+                                                const ic = group.latest;
+                                                const hasPriority = ic.priority !== null && ic.priority !== undefined && ic.priority !== '';
+                                                if (viewMode === 'waiting') return ic.status === 'pending' && hasPriority;
+                                                if (viewMode === 'pcr') return ic.reason === 'pcr';
+                                                return true;
+                                            })
+                                            .map(group => {
+                                                const ic = group.latest;
+                                                const isExpanded = expandedPatients.has(group.id);
+                                                return (
+                                                    <React.Fragment key={group.id}>
+                                                        <tr className={`hover:bg-slate-50/50 transition-all group cursor-pointer border-b border-slate-100 ${isExpanded ? 'bg-indigo-50/30' : ''}`}
+                                                            onClick={(e) => group.history.length > 0 ? togglePatientExpansion(group.id, e) : handleEdit(ic)}>
+                                                            <td className="px-6 py-4">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className={`flex-none flex items-center justify-center size-8 rounded-full transition-all group-hover:bg-indigo-50 ${isExpanded ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400'}`}>
+                                                                        {group.history.length > 0 ? (
+                                                                            <svg 
+                                                                                xmlns="http://www.w3.org/2000/svg" 
+                                                                                viewBox="0 0 24 24" 
+                                                                                fill="none" 
+                                                                                stroke="currentColor" 
+                                                                                strokeWidth="3" 
+                                                                                strokeLinecap="round" 
+                                                                                strokeLinejoin="round" 
+                                                                                className={`size-4 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+                                                                            >
+                                                                                <path d="M6 9l6 6 6-6" />
+                                                                            </svg>
+                                                                        ) : (
+                                                                            <svg 
+                                                                                xmlns="http://www.w3.org/2000/svg" 
+                                                                                viewBox="0 0 24 24" 
+                                                                                fill="currentColor" 
+                                                                                className="size-4 opacity-30"
+                                                                            >
+                                                                                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                                                                            </svg>
+                                                                        )}
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="font-bold text-slate-900 leading-tight">{ic.patient_name}</div>
+                                                                            <div className="flex flex-col items-center justify-center bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 shadow-sm shrink-0 min-w-[75px]">
+                                                                                <div className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">
+                                                                                    {new Date(ic.created_at || '').toLocaleString('es-PE', { day: '2-digit', month: 'short' }).replace('.', '')}
+                                                                                </div>
+                                                                                <div className="text-[10px] font-extrabold text-indigo-600 leading-none mt-0.5">
+                                                                                    {new Date(ic.created_at || '').toLocaleString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false })} hrs
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tight flex items-center gap-2 mt-0.5">
+                                                                            HC: {ic.hc || '---'}
+                                                                            {group.total > 1 && (
+                                                                                <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-[9px] font-black shadow-sm">
+                                                                                    {group.total} evaluaciones
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4">
+                                                                <div className="text-sm font-bold text-slate-700">{ic.age}a</div>
+                                                                <div className="text-[10px] text-slate-400 uppercase font-black">{ic.sex}</div>
+                                                            </td>
+                                                            <td className="px-6 py-4">
+                                                                {ic.priority ? (
+                                                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wide border
+                                                                        ${ic.priority === '1' ? 'bg-red-50 text-red-600 border-red-100' :
+                                                                          ic.priority === '2' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                                                                          'bg-indigo-50 text-indigo-600 border-indigo-100'}`}>
+                                                                        P{ic.priority}
+                                                                    </span>
+                                                                ) : <span className="text-[10px] text-slate-300 italic">---</span>}
+                                                            </td>
+                                                            <td className="px-6 py-4">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-xs font-bold text-slate-700">{ic.service_origin}</span>
+                                                                    <span className="text-[9px] font-bold text-slate-400 uppercase">Cama {ic.bed_number}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4">
+                                                                <div className="flex flex-col gap-1">
+                                                                    {ic.health_problem_1 && (
+                                                                        <div className="text-[11px] font-bold text-slate-800 leading-tight">
+                                                                            {ic.health_problem_1.replace('(SUG) ', '')}
+                                                                        </div>
+                                                                    )}
+                                                                    {ic.health_problem_2 && (
+                                                                        <div className="text-[9px] text-slate-500 font-medium italic border-l-2 border-slate-200 pl-2 mt-0.5">
+                                                                            {ic.health_problem_2}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center">
+                                                                <span className="text-[9px] font-black uppercase bg-slate-100 text-slate-600 px-2 py-1 rounded-md border border-slate-200">
+                                                                    {ic.reason?.replace('_', ' ')}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center">
+                                                                <div className="text-[10px] font-bold text-slate-600 truncate max-w-[100px] mx-auto">
+                                                                    {ic.responders?.split(' ')[1] || ic.responders || '---'}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center">
+                                                                {renderStatusBadge(ic.status, ic.priority)}
+                                                            </td>
+                                                        </tr>
+                                                        {isExpanded && group.history.map((hist) => (
+                                                            <tr key={hist.id} className="bg-slate-50/50 hover:bg-slate-100/50 border-l-4 border-l-indigo-400 animate-in slide-in-from-top-1 duration-200" onClick={() => handleEdit(hist)}>
+                                                                <td className="px-12 py-3">
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-[10px] font-black text-indigo-600 uppercase tracking-tight">Evaluación Previa</span>
+                                                                        <span className="text-[9px] text-slate-400 font-medium">{new Date(hist.created_at || '').toLocaleString()}</span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-6 py-3 text-[10px] text-slate-400 font-bold uppercase italic text-center">Historial</td>
+                                                                <td className="px-6 py-3">
+                                                                    {hist.priority && (
+                                                                        <span className="text-[9px] font-black uppercase text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded">
+                                                                            P{hist.priority}
+                                                                        </span>
+                                                                    )}
+                                                                </td>
+                                                                <td className="px-6 py-3 text-[10px] font-bold text-slate-500">{hist.service_origin}</td>
+                                                                <td className="px-6 py-3">
+                                                                    <div className="text-[9px] text-slate-500 font-medium italic border-l-2 border-indigo-200 pl-2">
+                                                                        {hist.health_problem_1 || hist.reason}
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-6 py-3 text-center">
+                                                                    <span className="text-[9px] font-bold text-slate-400 uppercase italic">---</span>
+                                                                </td>
+                                                                <td className="px-6 py-3 text-center text-[9px] font-bold text-slate-400">{hist.responders || '---'}</td>
+                                                                <td className="px-6 py-3 text-center">
+                                                                    {renderStatusBadge(hist.status, hist.priority)}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </React.Fragment>
+                                                );
+                                            })
+                                    )
+                                ) : (
+                                    interconsultations.map(ic => (
                                         <tr key={ic.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => handleEdit(ic)}>
                                             <td className="px-6 py-4">
-                                                <div className="font-bold text-slate-900">{ic.patient_name}</div>
-                                                <div className="text-xs text-slate-400 font-bold uppercase tracking-tight">HC: {ic.hc || '---'}</div>
+                                                <div className="font-bold text-slate-900 leading-tight">{ic.patient_name}</div>
+                                                <div className="text-[10px] text-slate-400 font-bold uppercase">HC: {ic.hc || '---'}</div>
                                             </td>
+                                            <td className="px-6 py-4 text-sm font-bold text-slate-700">{ic.age}a</td>
                                             <td className="px-6 py-4">
-                                                <div className="text-sm font-semibold text-slate-700">{ic.age} años</div>
-                                                <div className="text-xs text-slate-400">{ic.sex === 'M' ? 'Masculino' : 'Femenino'}</div>
+                                                {ic.priority ? <span className="text-[10px] font-black text-indigo-600 border border-indigo-100 bg-indigo-50 px-2 py-0.5 rounded-lg">P{ic.priority}</span> : '---'}
                                             </td>
-                                            <td className="px-6 py-4">
-                                                {ic.priority ? (
-                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wide
-                                                        ${ic.priority === '1' ? 'bg-red-50 text-red-600 border border-red-100' :
-                                                            ic.priority === '2' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                                                'bg-indigo-50 text-indigo-600 border border-indigo-100'}`}>
-                                                        {ic.priority === '1' && <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span></span>}
-                                                        Prioridad {ic.priority}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-xs text-slate-400 font-bold">Sin prioridad</span>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs font-bold text-slate-700">{ic.service_origin}</span>
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Cama {ic.bed_number}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex flex-col gap-1">
-                                                    {ic.health_problem_1 && (
-                                                        <div className="text-[10px] font-bold text-slate-600 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded flex items-center gap-1">
-                                                            <span className="size-1 rounded-full bg-indigo-400"></span>
-                                                            {ic.health_problem_1.startsWith('(SUG) ') ? ic.health_problem_1.substring(6) : ic.health_problem_1}
-                                                        </div>
-                                                    )}
-                                                    {ic.health_problem_2 && (
-                                                        <div className="text-[10px] font-bold text-slate-600 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded flex items-center gap-1">
-                                                            <span className="size-1 rounded-full bg-slate-300"></span>
-                                                            {ic.health_problem_2}
-                                                        </div>
-                                                    )}
-                                                    {!ic.health_problem_1 && !ic.health_problem_2 && (
-                                                        <span className="text-[10px] italic text-slate-400">---</span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <span className="inline-block px-2 py-1 rounded border border-slate-200 bg-white text-xs font-bold text-slate-600 uppercase tracking-tight">
-                                                    {ic.reason === 'evaluacion_pase' && ic.health_problem_1?.startsWith('(SUG) ') 
-                                                        ? 'Evaluación y Sugerencias' 
-                                                        : ic.reason?.replace('_', ' ')}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <div className="text-xs font-bold text-slate-600 truncate max-w-[120px]">
-                                                    {ic.responders || '---'}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                {renderStatusBadge(ic.status, ic.reason === 'pcr' ? 'PCR' : ic.priority)}
+                                            <td className="px-6 py-4 text-[10px] font-bold text-slate-600">{ic.service_origin}</td>
+                                            <td className="px-6 py-4 text-[10px] text-slate-500 truncate max-w-[140px]">{ic.health_problem_1 || ic.reason}</td>
+                                            <td className="px-6 py-4 text-center text-[10px] uppercase font-black">{ic.reason?.replace('_', ' ')}</td>
+                                            <td className="px-6 py-4 text-center text-[10px] font-bold text-slate-500">{ic.responders || '---'}</td>
+                                            <td className="px-6 py-4 text-center">{renderStatusBadge(ic.status, ic.priority)}</td>
+                                            <td className="px-6 py-4 text-right">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4 text-slate-300 ml-auto">
+                                                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                                                </svg>
                                             </td>
                                         </tr>
                                     ))
@@ -523,7 +764,8 @@ const InterconsultasScreen: React.FC = () => {
                     ) : (
                         interconsultations
                                 .filter(ic => {
-                                    if (viewMode === 'waiting') return ic.status === 'pending';
+                                    const hasPriority = ic.priority !== null && ic.priority !== undefined && ic.priority !== '';
+                                    if (viewMode === 'waiting') return ic.status === 'pending' && hasPriority;
                                     if (viewMode === 'pcr') return ic.reason === 'pcr';
                                     return true;
                                 })
@@ -532,7 +774,17 @@ const InterconsultasScreen: React.FC = () => {
                                 <div className="p-4 space-y-3">
                                     <div className="flex justify-between items-start">
                                         <div className="min-w-0 flex-1 mr-2">
-                                            <div className="font-extrabold text-slate-900 leading-tight text-base truncate uppercase">{ic.patient_name}</div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="font-extrabold text-slate-900 leading-tight text-base truncate uppercase">{ic.patient_name}</div>
+                                                <div className="flex flex-col items-center justify-center bg-slate-50/80 px-1.5 py-1 rounded border border-slate-100 shrink-0 min-w-[65px]">
+                                                    <div className="text-[8px] font-black text-slate-500 uppercase tracking-tighter">
+                                                        {new Date(ic.created_at || '').toLocaleString('es-PE', { day: '2-digit', month: 'short' }).replace('.', '')}
+                                                    </div>
+                                                    <div className="text-[9px] font-extrabold text-indigo-600 leading-none mt-0.5">
+                                                        {new Date(ic.created_at || '').toLocaleString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false })} hrs
+                                                    </div>
+                                                </div>
+                                            </div>
                                             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
                                                 HC: <span className="text-slate-600">{ic.hc || '----'}</span> • {ic.age}a • {ic.sex === 'M' ? 'Masc' : 'Fem'}
                                             </div>
@@ -551,7 +803,10 @@ const InterconsultasScreen: React.FC = () => {
                                             </span>
                                         )}
                                         <div className="text-[10px] font-bold text-slate-600 bg-slate-100/80 px-2 py-0.5 rounded-md border border-slate-200 flex items-center gap-1 capitalize">
-                                            <span className="material-symbols-outlined text-[13px]">meeting_room</span>
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="size-3">
+                                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                                                <polyline points="9 22 9 12 15 12 15 22" />
+                                            </svg>
                                             {ic.service_origin || '---'} (C-{ic.bed_number})
                                         </div>
                                     </div>
@@ -575,7 +830,11 @@ const InterconsultasScreen: React.FC = () => {
                                 <div className="border-t border-slate-100 bg-slate-50/30 px-4 py-2.5 flex justify-between items-center">
                                     <div className="flex items-center gap-2">
                                         <div className="size-6 rounded-full bg-indigo-100 flex items-center justify-center">
-                                            <span className="material-symbols-outlined text-xs text-indigo-600">info</span>
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="size-3 text-indigo-600">
+                                                <circle cx="12" cy="12" r="10" />
+                                                <line x1="12" y1="16" x2="12" y2="12" />
+                                                <line x1="12" y1="8" x2="12.01" y2="8" />
+                                            </svg>
                                         </div>
                                          <div className="text-[10px] font-black text-indigo-700 uppercase tracking-tight">
                                              {ic.reason === 'evaluacion_pase' && ic.health_problem_1?.startsWith('(SUG) ') 
@@ -585,7 +844,13 @@ const InterconsultasScreen: React.FC = () => {
                                     </div>
                                     {ic.responders && (
                                         <div className="flex items-center gap-1.5 text-[9px] font-bold text-slate-400 uppercase">
-                                            <span className="material-symbols-outlined text-[12px]">clinical_notes</span>
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="size-3">
+                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                                <polyline points="14 2 14 8 20 8" />
+                                                <line x1="16" y1="13" x2="8" y2="13" />
+                                                <line x1="16" y1="17" x2="8" y2="17" />
+                                                <polyline points="10 9 9 9 8 9" />
+                                            </svg>
                                             {ic.responders}
                                         </div>
                                     )}
@@ -606,7 +871,10 @@ const InterconsultasScreen: React.FC = () => {
                                 <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Solicitud de evaluación UCIN</p>
                             </div>
                             <button onClick={() => setShowModal(false)} className="bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-red-500 rounded-full p-2 transition">
-                                <span className="material-symbols-outlined">close</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="size-5">
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
                             </button>
                         </div>
 
@@ -773,9 +1041,16 @@ const InterconsultasScreen: React.FC = () => {
                                                 <label className="label-std">Nro Intentos</label>
                                                 <input type="number" className="input-std" value={formData.cvc_attempts || ''} onChange={e => handleChange('cvc_attempts', e.target.value)} />
                                             </div>
-                                            <div className="md:col-span-2">
-                                                <label className="label-std">Operadores (Asistente/Residente)</label>
-                                                <input type="text" className="input-std" placeholder="Dr. X / Res. Y" value={formData.cvc_operators || ''} onChange={e => handleChange('cvc_operators', e.target.value)} />
+                                            <div className="md:col-span-1">
+                                                <label className="label-std">Médico Asistente</label>
+                                                <select className="input-std" value={(formData as any).cvc_assistant || ''} onChange={e => handleChange('cvc_assistant', e.target.value)}>
+                                                    <option value="">Seleccionar...</option>
+                                                    {DOCTORS.map(doc => <option key={doc} value={doc}>{doc}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="md:col-span-1">
+                                                <label className="label-std">Médico Residente</label>
+                                                <input type="text" className="input-std" placeholder="Nombre del Residente" value={(formData as any).cvc_resident || ''} onChange={e => handleChange('cvc_resident', e.target.value)} />
                                             </div>
                                         </div>
                                     )}
@@ -795,7 +1070,7 @@ const InterconsultasScreen: React.FC = () => {
                                             <input type="text" className="input-std" placeholder="Secundario o comorbilidad" value={formData.health_problem_2 || ''} onChange={e => handleChange('health_problem_2', e.target.value)} />
                                         </div>
                                     </div>
-
+                                    
                                     <div>
                                         <label className="label-std">Prioridad de Admisión</label>
                                         <select className="input-std border-indigo-200 bg-white font-bold text-slate-700" value={formData.priority || ''} onChange={e => handleChange('priority', e.target.value)}>
@@ -806,7 +1081,6 @@ const InterconsultasScreen: React.FC = () => {
                                             <option value="4A">Prioridad 4A</option>
                                             <option value="4B">Prioridad 4B</option>
                                         </select>
-                                        <p className="text-[10px] text-slate-400 mt-1 pl-1">Establece el orden en la lista de espera.</p>
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-200 mt-2">
@@ -818,30 +1092,14 @@ const InterconsultasScreen: React.FC = () => {
                                             <label className="label-std">Médico Asistente</label>
                                             <select className="input-std" value={formData.responders || ''} onChange={e => handleChange('responders', e.target.value)}>
                                                 <option value="">Seleccionar...</option>
-                                                <option value="Dr Geng">Dr Geng</option>
-                                                <option value="Dr Solorzano">Dr Solorzano</option>
-                                                <option value="Dr Ramirez">Dr Ramirez</option>
-                                                <option value="Dr Cruz">Dr Cruz</option>
-                                                <option value="Dr Diaz">Dr Diaz</option>
-                                                <option value="Dr Linares">Dr Linares</option>
-                                                <option value="Dr Sumari">Dr Sumari</option>
-                                                <option value="Dr Palacios">Dr Palacios</option>
-                                                <option value="Dra Quiñones">Dra Quiñones</option>
-                                                <option value="Dr Palma">Dr Palma</option>
-                                                <option value="Dr Becerra">Dr Becerra</option>
+                                                {DOCTORS.map(doc => <option key={doc} value={doc}>{doc}</option>)}
                                             </select>
                                         </div>
                                         <div className="md:col-span-2">
                                             <label className="label-std">Estado</label>
                                             <select className="input-std" value={formData.status || ''} onChange={e => handleChange('status', e.target.value)}>
-                                                {(formData.priority === '1' || formData.priority === '2' || formData.priority === '3' || !formData.priority) ? (
-                                                    <>
-                                                        <option value="pending">Pendiente Ingreso</option>
-                                                        <option value="admitted">Admitido</option>
-                                                    </>
-                                                ) : (
-                                                    <option value="completed">No tributario de área crítica</option>
-                                                )}
+                                                <option value="pending">Pendiente Ingreso</option>
+                                                <option value="admitted">Admitido</option>
                                             </select>
                                         </div>
                                     </div>
@@ -871,17 +1129,7 @@ const InterconsultasScreen: React.FC = () => {
                                             <label className="label-std">Médico Asistente</label>
                                             <select className="input-std" value={formData.responders || ''} onChange={e => handleChange('responders', e.target.value)}>
                                                 <option value="">Seleccionar...</option>
-                                                <option value="Dr Geng">Dr Geng</option>
-                                                <option value="Dr Solorzano">Dr Solorzano</option>
-                                                <option value="Dr Ramirez">Dr Ramirez</option>
-                                                <option value="Dr Cruz">Dr Cruz</option>
-                                                <option value="Dr Diaz">Dr Diaz</option>
-                                                <option value="Dr Linares">Dr Linares</option>
-                                                <option value="Dr Sumari">Dr Sumari</option>
-                                                <option value="Dr Palacios">Dr Palacios</option>
-                                                <option value="Dra Quiñones">Dra Quiñones</option>
-                                                <option value="Dr Palma">Dr Palma</option>
-                                                <option value="Dr Becerra">Dr Becerra</option>
+                                                {DOCTORS.map(doc => <option key={doc} value={doc}>{doc}</option>)}
                                             </select>
                                         </div>
                                     </div>
@@ -923,23 +1171,14 @@ const InterconsultasScreen: React.FC = () => {
                                             <label className="label-std">Médico Asistente</label>
                                             <select className="input-std" value={formData.responders || ''} onChange={e => handleChange('responders', e.target.value)}>
                                                 <option value="">Seleccionar...</option>
-                                                <option value="Dr Geng">Dr Geng</option>
-                                                <option value="Dr Solorzano">Dr Solorzano</option>
-                                                <option value="Dr Ramirez">Dr Ramirez</option>
-                                                <option value="Dr Cruz">Dr Cruz</option>
-                                                <option value="Dr Diaz">Dr Diaz</option>
-                                                <option value="Dr Linares">Dr Linares</option>
-                                                <option value="Dr Sumari">Dr Sumari</option>
-                                                <option value="Dr Palacios">Dr Palacios</option>
-                                                <option value="Dra Quiñones">Dra Quiñones</option>
-                                                <option value="Dr Palma">Dr Palma</option>
-                                                <option value="Dr Becerra">Dr Becerra</option>
+                                                {DOCTORS.map(doc => <option key={doc} value={doc}>{doc}</option>)}
                                             </select>
                                         </div>
                                         <div className="md:col-span-2">
                                             <label className="label-std">Estado</label>
                                             <select className="input-std" value={formData.status || ''} onChange={e => handleChange('status', e.target.value)}>
                                                 <option value="pending">PENDIENTE INGRESO</option>
+                                                <option value="admitted">ADMITIDO</option>
                                                 <option value="completed">FALLECIDO</option>
                                             </select>
                                         </div>
@@ -949,7 +1188,7 @@ const InterconsultasScreen: React.FC = () => {
 
                             <div className="pt-4 sticky bottom-0 bg-white pb-2 flex gap-3">
                                 <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-widest text-sm py-4 rounded-xl transition-all shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-1">
-                                    {formData.id ? 'Actualizar Interconsulta' : 'Registrar Interconsulta'}
+                                    {formData.id ? 'Actualizar Interconsulta (V2)' : 'Registrar Interconsulta (V2)'}
                                 </button>
                                 {formData.id && (
                                     <button

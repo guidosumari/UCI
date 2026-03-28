@@ -58,6 +58,8 @@ const Dashboard: React.FC = () => {
       .from('interconsultations')
       .select('*')
       .eq('status', 'pending')
+      .not('priority', 'is', null)
+      .not('priority', 'eq', '')
       .order('created_at', { ascending: false });
 
     if (data) setWaitingList(data as Interconsultation[]);
