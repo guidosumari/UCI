@@ -1045,15 +1045,13 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                     <p className="text-xs text-slate-500">Datos de Ingreso a UCI</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    {patientId !== 'new' && (
-                        <button
-                            onClick={generateClinicalHistoryPDF}
-                            className="bg-indigo-600 text-white px-5 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition-all shadow-md flex items-center gap-2"
-                        >
-                            <span className="material-symbols-outlined text-lg">download</span>
-                            Descargar PDF
-                        </button>
-                    )}
+                    <button
+                        onClick={generateClinicalHistoryPDF}
+                        className="bg-indigo-600 text-white px-5 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition-all shadow-md flex items-center gap-2"
+                    >
+                        <span className="material-symbols-outlined text-lg">download</span>
+                        Descargar PDF
+                    </button>
                     <button
                         onClick={handleSave}
                         disabled={saving}
