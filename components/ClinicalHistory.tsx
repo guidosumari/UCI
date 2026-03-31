@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 const PhysicalExamInput = ({
     label,
@@ -126,12 +126,12 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 illness_duration: data.illness_duration || '',
                 symptoms: data.symptoms || '',
                 onset: data.onset || '',
-                illness_course: data.illness_course || '',
+                illness_course: data.physical_exam?.clinical_extras?.illness_course || '',
                 anamnesis_text: data.anamnesis_text || '',
                 allergies: data.allergies ? data.allergies.join(', ') : '',
-                marital_status: data.marital_status || '',
-                religion: data.religion || '',
-                occupation: data.occupation || '',
+                marital_status: data.physical_exam?.clinical_extras?.marital_status || '',
+                religion: data.physical_exam?.clinical_extras?.religion || '',
+                occupation: data.physical_exam?.clinical_extras?.occupation || '',
             }));
         }
         setLoading(false);
@@ -145,6 +145,16 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
         setSaving(true);
 
         if (patientId === 'new') {
+            const physicalExamPayload = {
+                ...patientData.physical_exam,
+                clinical_extras: {
+                    marital_status: patientData.marital_status,
+                    religion: patientData.religion,
+                    occupation: patientData.occupation,
+                    illness_course: patientData.illness_course
+                }
+            };
+
             // Create new patient
             const newPatient = {
                 name: patientData.name,
@@ -156,14 +166,10 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 illness_duration: patientData.illness_duration,
                 symptoms: patientData.symptoms,
                 onset: patientData.onset,
-                illness_course: patientData.illness_course,
                 anamnesis_text: patientData.anamnesis_text,
                 admit_date: patientData.hospital_admission,
-                physical_exam: patientData.physical_exam, // Save structured data
+                physical_exam: physicalExamPayload, // Save structured data
                 allergies: patientData.allergies ? patientData.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s !== '') : [],
-                marital_status: patientData.marital_status,
-                religion: patientData.religion,
-                occupation: patientData.occupation,
                 // ... map other fields
             };
 
@@ -182,6 +188,16 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 alert('Error creando paciente: ' + e.message);
             }
         } else {
+            const physicalExamPayload = {
+                ...patientData.physical_exam,
+                clinical_extras: {
+                    marital_status: patientData.marital_status,
+                    religion: patientData.religion,
+                    occupation: patientData.occupation,
+                    illness_course: patientData.illness_course
+                }
+            };
+            
             // Update existing
             try {
                 const { error } = await supabase.from('patients').update({
@@ -194,14 +210,10 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                     illness_duration: patientData.illness_duration,
                     symptoms: patientData.symptoms,
                     onset: patientData.onset,
-                    illness_course: patientData.illness_course,
                     anamnesis_text: patientData.anamnesis_text,
                     admit_date: patientData.hospital_admission,
-                    physical_exam: patientData.physical_exam,
+                    physical_exam: physicalExamPayload,
                     allergies: patientData.allergies ? patientData.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s !== '') : [],
-                    marital_status: patientData.marital_status,
-                    religion: patientData.religion,
-                    occupation: patientData.occupation,
                 }).eq('id', patientId);
 
                 if (error) throw error;
@@ -239,7 +251,7 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
         const safe = (val: any) => val ? String(val).toUpperCase() : '------';
 
         const createTable = (head: any[], body: any[], options: any = {}) => {
-            (doc as any).autoTable({
+            autoTable(doc, {
                 head: head,
                 body: body,
                 startY: yPos,
@@ -363,7 +375,8 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
             ]
         );
 
-        doc.save(`HC_${patientData.hc || 'nueva'}_${patientData.name.replace(/ /g, '_')}.pdf`);
+        const safeName = patientData.name ? String(patientData.name).replace(/ /g, '_') : 'Desconocido';
+        doc.save(`HC_${patientData.hc || 'nueva'}_${safeName}.pdf`);
     };
 
     const renderFiliacion = () => (
