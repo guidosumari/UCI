@@ -2,14 +2,11 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Interconsultation } from '../types';
+import { DOCTORS } from '../constants';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-const DOCTORS = [
-    'Dr Geng', 'Dr Solorzano', 'Dr Ramirez', 'Dr Cruz', 'Dr Diaz', 
-    'Dr Linares', 'Dr Sumari', 'Dr Palacios', 'Dra Quiñones', 
-    'Dr Palma', 'Dr Becerra'
-];
+
 
 const InterconsultasScreen: React.FC = () => {
     const navigate = useNavigate();
@@ -425,10 +422,13 @@ const InterconsultasScreen: React.FC = () => {
     const handleChange = (field: string, value: any) => {
         setFormData(prev => {
             const newState = { ...prev, [field]: value };
-            if (field === 'priority') {
-                if (value === '4A' || value === '4B') {
+            if (field === 'priority' || field === 'reason') {
+                const currentReason = field === 'reason' ? value : newState.reason;
+                const currentPriority = field === 'priority' ? value : newState.priority;
+                
+                if (currentReason === 'evaluacion_pase' && (currentPriority === '4A' || currentPriority === '4B')) {
                     newState.status = 'completed';
-                } else if (prev.status === 'completed') {
+                } else if (field === 'priority' && value !== '4A' && value !== '4B' && prev.status === 'completed') {
                     newState.status = 'pending';
                 }
             }
@@ -492,6 +492,17 @@ const InterconsultasScreen: React.FC = () => {
                                 <button onClick={() => setViewMode('pcr')} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${viewMode === 'pcr' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>PCR</button>
                                 <button onClick={() => setViewMode('all')} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${viewMode === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Todas</button>
                             </div>
+
+                            {/* Dashboard Button */}
+                            <button
+                                onClick={() => navigate('/interconsultas/dashboard')}
+                                className="hidden md:flex items-center gap-2 bg-white text-slate-600 px-4 py-2 rounded-xl font-bold text-[11px] md:text-sm hover:bg-slate-50 border border-slate-200 transition shadow-sm hover:shadow-md mr-2"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="size-4 md:size-4.5 text-indigo-500">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>
+                                </svg>
+                                <span>Estadísticas</span>
+                            </button>
 
                             <button
                                 onClick={handleNew}
@@ -1095,13 +1106,15 @@ const InterconsultasScreen: React.FC = () => {
                                                 {DOCTORS.map(doc => <option key={doc} value={doc}>{doc}</option>)}
                                             </select>
                                         </div>
-                                        <div className="md:col-span-2">
-                                            <label className="label-std">Estado</label>
-                                            <select className="input-std" value={formData.status || ''} onChange={e => handleChange('status', e.target.value)}>
-                                                <option value="pending">Pendiente Ingreso</option>
-                                                <option value="admitted">Admitido</option>
-                                            </select>
-                                        </div>
+                                         {!(formData.reason === 'evaluacion_pase' && (formData.priority === '4A' || formData.priority === '4B')) && (
+                                            <div className="md:col-span-2">
+                                                <label className="label-std">Estado</label>
+                                                <select className="input-std" value={formData.status || ''} onChange={e => handleChange('status', e.target.value)}>
+                                                    <option value="pending">Pendiente Ingreso</option>
+                                                    <option value="admitted">Admitido</option>
+                                                </select>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}

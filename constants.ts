@@ -90,3 +90,10 @@ export const MOCK_DEVICES: Device[] = [
     nextCheck: 'Requerido Ahora'
   }
 ];
+
+export const DOCTORS = [
+    'Dr Geng', 'Dr Solorzano', 'Dr Ramirez', 'Dr Cruz', 'Dr Diaz', 
+    'Dr Linares', 'Dr Sumari', 'Dr Palacios', 'Dra Quiñones', 
+    'Dr Palma', 'Dr Becerra'
+];
+
