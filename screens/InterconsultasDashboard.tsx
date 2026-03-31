@@ -88,18 +88,19 @@ const InterconsultasDashboard: React.FC = () => {
     }, [filteredDataByMonth]);
 
     const statsByDoctor = useMemo(() => {
-        const stats: { [key: string]: { total: number, pending: number, completed: number, admitted: number } } = {};
+        const stats: { [key: string]: { total: number, eval_pase: number, eval_sug: number, pcr: number, utsna: number } } = {};
         
         DOCTORS.forEach(doc => {
-            stats[doc] = { total: 0, pending: 0, completed: 0, admitted: 0 };
+            stats[doc] = { total: 0, eval_pase: 0, eval_sug: 0, pcr: 0, utsna: 0 };
         });
 
         filteredDataByMonth.forEach(ic => {
             if (ic.responders && stats[ic.responders]) {
                 stats[ic.responders].total++;
-                if (ic.status === 'pending') stats[ic.responders].pending++;
-                if (ic.status === 'completed') stats[ic.responders].completed++;
-                if (ic.status === 'admitted') stats[ic.responders].admitted++;
+                if (ic.reason === 'evaluacion_pase') stats[ic.responders].eval_pase++;
+                if (ic.reason === 'evaluacion_sugerencias') stats[ic.responders].eval_sug++;
+                if (ic.reason === 'pcr') stats[ic.responders].pcr++;
+                if (ic.reason === 'ustna') stats[ic.responders].utsna++;
             }
         });
 
@@ -300,9 +301,10 @@ const InterconsultasDashboard: React.FC = () => {
                                 <tr>
                                     <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Médico Evaluador</th>
                                     <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Total ICs</th>
-                                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center text-amber-500">Pendientes</th>
-                                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center text-green-500">Admitidos</th>
-                                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center text-indigo-500">Completados</th>
+                                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center text-indigo-500">Eval. y Pase</th>
+                                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center text-teal-500">Eval. y Sug.</th>
+                                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center text-rose-500">PCR</th>
+                                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center text-amber-500">UTSNA</th>
                                     <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Acción</th>
                                 </tr>
                             </thead>
@@ -319,18 +321,23 @@ const InterconsultasDashboard: React.FC = () => {
                                         </td>
                                         <td className="px-8 py-5 text-center font-black text-slate-900">{statsByDoctor[doc]?.total || 0}</td>
                                         <td className="px-8 py-5 text-center">
-                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black ${statsByDoctor[doc]?.pending > 0 ? 'bg-amber-100 text-amber-700' : 'text-slate-300'}`}>
-                                                {statsByDoctor[doc]?.pending || 0}
+                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black ${statsByDoctor[doc]?.eval_pase > 0 ? 'bg-indigo-100 text-indigo-700' : 'text-slate-300'}`}>
+                                                {statsByDoctor[doc]?.eval_pase || 0}
                                             </span>
                                         </td>
                                         <td className="px-8 py-5 text-center">
-                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black ${statsByDoctor[doc]?.admitted > 0 ? 'bg-green-100 text-green-700' : 'text-slate-300'}`}>
-                                                {statsByDoctor[doc]?.admitted || 0}
+                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black ${statsByDoctor[doc]?.eval_sug > 0 ? 'bg-teal-100 text-teal-700' : 'text-slate-300'}`}>
+                                                {statsByDoctor[doc]?.eval_sug || 0}
                                             </span>
                                         </td>
                                         <td className="px-8 py-5 text-center">
-                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black ${statsByDoctor[doc]?.completed > 0 ? 'bg-indigo-100 text-indigo-700' : 'text-slate-300'}`}>
-                                                {statsByDoctor[doc]?.completed || 0}
+                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black ${statsByDoctor[doc]?.pcr > 0 ? 'bg-rose-100 text-rose-700' : 'text-slate-300'}`}>
+                                                {statsByDoctor[doc]?.pcr || 0}
+                                            </span>
+                                        </td>
+                                        <td className="px-8 py-5 text-center">
+                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black ${statsByDoctor[doc]?.utsna > 0 ? 'bg-amber-100 text-amber-700' : 'text-slate-300'}`}>
+                                                {statsByDoctor[doc]?.utsna || 0}
                                             </span>
                                         </td>
                                         <td className="px-8 py-5 text-right">
