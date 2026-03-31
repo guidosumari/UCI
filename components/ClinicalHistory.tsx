@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 const PhysicalExamInput = ({
     label,
@@ -40,8 +42,9 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
     const [patientData, setPatientData] = useState<any>({
         // Filiación
         name: '', age: '', sex: '', dni: '', hc: '', bed: '', acuity: 'ESTABLE', address: '', relative: '', relative_phone: '', hospital_admission: '', icu_admission: '', ucin_transfer_date: '',
+        marital_status: '', religion: '', occupation: '',
         // Anamnesis (Added fields)
-        illness_duration: '', symptoms: '', onset: '', anamnesis_text: '',
+        illness_duration: '', symptoms: '', onset: '', illness_course: '', anamnesis_text: '',
         // Antecedentes (Checkbox)
         hx_hta: false, hx_dm: false, hx_icc: false, hx_erc: false, hx_tbc: false, hx_epoc: false, hx_fibrosis: false, hx_other: '', hx_surgical: '', hx_medication: '',
         allergies: '',
@@ -123,8 +126,12 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 illness_duration: data.illness_duration || '',
                 symptoms: data.symptoms || '',
                 onset: data.onset || '',
+                illness_course: data.illness_course || '',
                 anamnesis_text: data.anamnesis_text || '',
                 allergies: data.allergies ? data.allergies.join(', ') : '',
+                marital_status: data.marital_status || '',
+                religion: data.religion || '',
+                occupation: data.occupation || '',
             }));
         }
         setLoading(false);
@@ -149,10 +156,14 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 illness_duration: patientData.illness_duration,
                 symptoms: patientData.symptoms,
                 onset: patientData.onset,
+                illness_course: patientData.illness_course,
                 anamnesis_text: patientData.anamnesis_text,
                 admit_date: patientData.hospital_admission,
                 physical_exam: patientData.physical_exam, // Save structured data
                 allergies: patientData.allergies ? patientData.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s !== '') : [],
+                marital_status: patientData.marital_status,
+                religion: patientData.religion,
+                occupation: patientData.occupation,
                 // ... map other fields
             };
 
@@ -183,10 +194,14 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                     illness_duration: patientData.illness_duration,
                     symptoms: patientData.symptoms,
                     onset: patientData.onset,
+                    illness_course: patientData.illness_course,
                     anamnesis_text: patientData.anamnesis_text,
                     admit_date: patientData.hospital_admission,
                     physical_exam: patientData.physical_exam,
                     allergies: patientData.allergies ? patientData.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s !== '') : [],
+                    marital_status: patientData.marital_status,
+                    religion: patientData.religion,
+                    occupation: patientData.occupation,
                 }).eq('id', patientId);
 
                 if (error) throw error;
@@ -196,6 +211,159 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
             }
         }
         setSaving(false);
+    };
+
+    const generateClinicalHistoryPDF = () => {
+        const doc = new jsPDF('p', 'pt', 'a4'); 
+        let yPos = 40;
+
+        const boxStyles = { lineColor: [0, 0, 0], lineWidth: 1, fillColor: [255, 255, 255] };
+        
+        doc.rect(40, yPos, 160, 40); 
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text('Servicio:', 45, yPos + 12);
+        doc.text('UCIN', 95, yPos + 12);
+        doc.line(40, yPos + 20, 200, yPos + 20);
+        doc.text('HCL:', 45, yPos + 32);
+        doc.text(patientData.hc || '----', 95, yPos + 32);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.text('HISTORIA CLÍNICA UCIN – ADULTOS', 250, yPos + 25);
+        doc.setLineWidth(1);
+        doc.line(250, yPos + 27, 490, yPos + 27);
+
+        yPos += 60;
+
+        const safe = (val: any) => val ? String(val).toUpperCase() : '------';
+
+        const createTable = (head: any[], body: any[], options: any = {}) => {
+            (doc as any).autoTable({
+                head: head,
+                body: body,
+                startY: yPos,
+                theme: 'grid',
+                styles: {
+                    fontSize: 8,
+                    textColor: [0, 0, 0],
+                    lineColor: [0, 0, 0],
+                    lineWidth: 0.5,
+                    cellPadding: 3,
+                    font: 'helvetica',
+                },
+                headStyles: {
+                    fillColor: [255, 255, 255],
+                    textColor: [0, 0, 0],
+                    fontStyle: 'bold',
+                    halign: 'center',
+                },
+                ...options
+            });
+            yPos = (doc as any).lastAutoTable.finalY + 10;
+        };
+
+        createTable(
+            [[{ content: 'DATOS DE FILIACIÓN', colSpan: 4 }]],
+            [
+                ['Nombre:', { content: safe(patientData.name), colSpan: 3 }],
+                ['Edad: ' + safe(patientData.age), { content: 'Sexo: ' + safe(patientData.sex), colSpan: 2 }, 'DNI: ' + safe(patientData.dni)],
+                ['Estado civil: ' + safe(patientData.marital_status), { content: 'Religión: ' + safe(patientData.religion), colSpan: 2 }, 'Ocupación: ' + safe(patientData.occupation)],
+                [{ content: 'Fecha de Ingreso al Hosp.: ' + safe(patientData.hospital_admission), colSpan: 4 }],
+                [{ content: 'Fecha de ingreso a UCIN: ' + safe(patientData.icu_admission).replace('T', ' '), colSpan: 4 }],
+                [{ content: 'Dirección: ' + safe(patientData.address), colSpan: 4 }],
+                [{ content: 'Persona Responsable: ' + safe(patientData.relative), colSpan: 2 }, { content: 'CEL: ' + safe(patientData.relative_phone), colSpan: 2 }]
+            ]
+        );
+
+        const getAntecedentesString = () => {
+            let acts = [];
+            if(patientData.hx_hta) acts.push('HTA');
+            if(patientData.hx_dm) acts.push('DM');
+            if(patientData.hx_icc) acts.push('ICC');
+            if(patientData.hx_erc) acts.push('ERC');
+            if(patientData.hx_tbc) acts.push('TBC');
+            if(patientData.hx_epoc) acts.push('EPOC');
+            if(patientData.hx_fibrosis) acts.push('FIBROSIS');
+            if(patientData.hx_other) acts.push(patientData.hx_other);
+            return acts.length > 0 ? acts.join(', ') : 'NIEGA';
+        };
+
+        createTable(
+            [[{ content: 'ANTECEDENTES', colSpan: 6 }]],
+            [
+                ['Personales:', { content: getAntecedentesString().toUpperCase(), colSpan: 5 }],
+                ['Hábitos Nocivos:', 'Tabaco:', 'NIEGA', 'Alcohol:', 'NIEGA', 'Drogas: NIEGA'],
+                ['RAMs/Alergias:', { content: patientData.allergies ? patientData.allergies.toUpperCase() : 'NIEGA', colSpan: 5 }],
+                ['Cirugías previas:', { content: safe(patientData.hx_surgical), colSpan: 5 }],
+                ['Transfusiones:', { content: 'NIEGA', colSpan: 5 }],
+                ['Medicación Habitual:', { content: safe(patientData.hx_medication), colSpan: 5 }],
+                ['Familiares:', { content: 'NIEGA', colSpan: 5 }]
+            ]
+        );
+
+        createTable(
+            [[{ content: 'ENFERMEDAD ACTUAL', colSpan: 4 }]],
+            [
+                ['T.E: ' + safe(patientData.illness_duration), 'Inicio: ' + safe(patientData.onset), {content: 'Curso: ' + safe(patientData.illness_course), colSpan: 2}],
+                [{ content: 'Síntomas y Signos: ' + safe(patientData.symptoms), colSpan: 4 }],
+                [{ content: safe(patientData.anamnesis_text), colSpan: 4, styles: { cellPadding: 5 } }]
+            ]
+        );
+
+        const pe = patientData.physical_exam || {};
+        const getV = (section: string, field: string) => pe[section] && pe[section][field] ? pe[section][field].toUpperCase() : '';
+
+        createTable(
+            [[{ content: 'EXAMEN FÍSICO', colSpan: 8 }]],
+            [
+                ['Peso', getV('vital_signs', 'weight'), 'PA:', getV('vital_signs', 'pa'), 'FC:', getV('vital_signs', 'fc'), 'SatO2', getV('vital_signs', 'spo2')],
+                ['Talla', getV('vital_signs', 'height'), 'T°:', getV('vital_signs', 'temp'), 'FR:', getV('vital_signs', 'fr'), 'FiO2', getV('vital_signs', 'fio2')],
+                ['General', { content: getV('neurologic', 'glasgow') || 'REG, REN, REH', colSpan: 7 }],
+                ['Piel', { content: 'TIBIA, ELÁSTICA, LLENADO CAPILAR < 2"', colSpan: 7 }],
+                ['Neurológico:', { content: safe(pe.neurologic), colSpan: 7 }],
+                ['Respiratorio:', { content: 'MV PASA EN AHT. ' + safe(pe.respiratory?.description) + '. SOP. VENT: ' + getV('respiratory', 'interface'), colSpan: 7 }],
+                ['Cardiovascular:', { content: safe(pe.cardiovascular), colSpan: 7 }],
+                ['Abdomen:', { content: safe(pe.abdomen), colSpan: 7 }],
+                [
+                    'Renal:', 
+                    { content: `UREA: ${getV('renal', 'urea')} CREA: ${getV('renal', 'creatinine')}\nBH: ${getV('renal', 'bh')}`, colSpan: 3 },
+                    { content: `pH ${getV('metabolic', 'ph')} pCO2 ${getV('metabolic', 'pco2')}\npO2 ${getV('respiratory', 'po2')} HCO3 ${getV('metabolic', 'hco3')}`, colSpan: 2 },
+                    { content: `NA: ${getV('metabolic', 'na')} K: ${getV('metabolic', 'k')}\nCL: ${getV('metabolic', 'cl')}`, colSpan: 2 }
+                ],
+                [
+                    'Metabólico:', 
+                    { content: `Glu: ${getV('metabolic','glu')} Lact: ${getV('metabolic','lact')}`, colSpan: 3 },
+                    { content: `Ca++: ${getV('metabolic','cai')} Mg++: ${getV('metabolic','mg')}`, colSpan: 2 },
+                    { content: `BT: ${getV('metabolic','bt')} TGP: ${getV('metabolic','tgp')}`, colSpan: 2 }
+                ],
+                [
+                    'Hematológico:', 
+                    { content: `Hb ${getV('hematology', 'hb')}   Hto: ${getV('hematology', 'hto')}`, colSpan: 3 },
+                    { content: `Plaquetas: ${getV('hematology', 'plaq')}`, colSpan: 2 },
+                    { content: `INR: ${getV('hematology', 'inr')}`, colSpan: 2 }
+                ],
+                [
+                    'Infeccioso:', { content: `Leuco ${getV('hematology', 'leu')}   PCR ${getV('infectious', 'pcr')}   PCT ${getV('infectious', 'pct')}`, colSpan: 7 }
+                ]
+            ]
+        );
+
+        createTable(
+            [[{ content: 'PROBLEMAS DE SALUD', colSpan: 1 }]],
+            [
+                [{ content: safe(patientData.health_problems).replace(/\n/g, '\n'), styles: { minCellHeight: 120, cellPadding: 5 } }]
+            ]
+        );
+
+        createTable(
+            [[{ content: 'PLAN', colSpan: 1 }]],
+            [
+                [{ content: safe(patientData.plan).replace(/\n/g, '\n'), styles: { minCellHeight: 120, cellPadding: 5 } }]
+            ]
+        );
+
+        doc.save(`HC_${patientData.hc || 'nueva'}_${patientData.name.replace(/ /g, '_')}.pdf`);
     };
 
     const renderFiliacion = () => (
@@ -227,6 +395,26 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
             <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">DNI / CE</label>
                 <input type="text" value={patientData.dni} onChange={e => handleChange('dni', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Estado Civil</label>
+                <select value={patientData.marital_status} onChange={e => handleChange('marital_status', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                    <option value="">Seleccionar...</option>
+                    <option value="SOLTERO">Soltero(a)</option>
+                    <option value="CASADO">Casado(a)</option>
+                    <option value="DIVORCIADO">Divorciado(a)</option>
+                    <option value="VIUDO">Viudo(a)</option>
+                    <option value="CONVIVIENTE">Conviviente</option>
+                </select>
+            </div>
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Religión</label>
+                <input type="text" value={patientData.religion} onChange={e => handleChange('religion', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="Ej: Católica" />
+            </div>
+            <div className="md:col-span-2">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Ocupación</label>
+                <input type="text" value={patientData.occupation} onChange={e => handleChange('occupation', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" placeholder="Ej: Maestro, Comerciante..." />
             </div>
 
             <div className="col-span-2">
@@ -502,8 +690,21 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                         className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
                     >
                         <option value="">Seleccionar...</option>
-                        <option value="insidioso">Insidioso</option>
-                        <option value="brusco">Brusco</option>
+                        <option value="INSIDIOSO">Insidioso</option>
+                        <option value="BRUSCO">Brusco</option>
+                    </select>
+                </div>
+                <div className="flex-1">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Curso</label>
+                    <select
+                        value={patientData.illness_course}
+                        onChange={e => handleChange('illness_course', e.target.value)}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                    >
+                        <option value="">Seleccionar...</option>
+                        <option value="PROGRESIVO">Progresivo</option>
+                        <option value="ESTACIONARIO">Estacionario</option>
+                        <option value="FLUCTUANTE">Fluctuante</option>
                     </select>
                 </div>
             </div>
@@ -843,23 +1044,34 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                     <h2 className="text-xl font-bold text-slate-800">Historia Clínica de Admisión</h2>
                     <p className="text-xs text-slate-500">Datos de Ingreso a UCI</p>
                 </div>
-                <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="bg-primary text-white px-6 py-2 rounded-lg font-bold text-sm hover:bg-blue-600 transition-all shadow-md disabled:opacity-70 flex items-center gap-2"
-                >
-                    <span className="material-symbols-outlined text-lg">save</span>
-                    {saving ? 'Guardando...' : 'Guardar Cambios'}
-                </button>
-                {patientId === 'new' && (
+                <div className="flex items-center gap-3">
+                    {patientId !== 'new' && (
+                        <button
+                            onClick={generateClinicalHistoryPDF}
+                            className="bg-indigo-600 text-white px-5 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition-all shadow-md flex items-center gap-2"
+                        >
+                            <span className="material-symbols-outlined text-lg">download</span>
+                            Descargar PDF
+                        </button>
+                    )}
                     <button
-                        onClick={() => window.location.hash = '/'}
-                        className="ml-3 bg-slate-100 text-slate-600 px-4 py-2 rounded-lg font-bold text-sm hover:bg-slate-200 transition-all flex items-center gap-2"
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="bg-primary text-white px-5 py-2 rounded-lg font-bold text-sm hover:bg-blue-600 transition-all shadow-md disabled:opacity-70 flex items-center gap-2"
                     >
-                        <span className="material-symbols-outlined text-lg">dashboard</span>
-                        Volver al Dashboard
+                        <span className="material-symbols-outlined text-lg">save</span>
+                        {saving ? 'Guardando...' : 'Guardar Cambios'}
                     </button>
-                )}
+                    {patientId === 'new' && (
+                        <button
+                            onClick={() => window.location.hash = '/'}
+                            className="bg-slate-100 text-slate-600 px-4 py-2 rounded-lg font-bold text-sm hover:bg-slate-200 transition-all flex items-center gap-2"
+                        >
+                            <span className="material-symbols-outlined text-lg">dashboard</span>
+                            Volver al Dashboard
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="flex border-b border-slate-200 bg-slate-50 px-6">
