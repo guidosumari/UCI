@@ -5,18 +5,29 @@ import { Interconsultation } from '../types';
 import { DOCTORS } from '../constants';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { 
+    BarChart, 
+    Bar, 
+    XAxis, 
+    YAxis, 
+    CartesianGrid, 
+    Tooltip, 
+    ResponsiveContainer, 
+    Cell 
+} from 'recharts';
 
 const InterconsultasDashboard: React.FC = () => {
     const navigate = useNavigate();
     const [interconsultations, setInterconsultations] = useState<Interconsultation[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getUTCMonth());
-    const [selectedDoctor, setSelectedDoctor] = useState<string>('all');
 
     const months = [
         'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
         'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
     ];
+
+    const COLORS = ['#4f46e5', '#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe', '#e0e7ff'];
 
     useEffect(() => {
         fetchInterconsultations();
@@ -40,6 +51,41 @@ const InterconsultasDashboard: React.FC = () => {
             return date.getUTCMonth() === selectedMonth;
         });
     }, [interconsultations, selectedMonth]);
+
+    const servicesDistribution = useMemo(() => {
+        const counts: { [key: string]: number } = {};
+        filteredDataByMonth.forEach(ic => {
+            const origin = ic.service_origin || 'Otro/No especificado';
+            counts[origin] = (counts[origin] || 0) + 1;
+        });
+
+        const total = filteredDataByMonth.length;
+        return Object.entries(counts)
+            .map(([name, value]) => ({
+                name,
+                value,
+                percentage: total > 0 ? Number(((value / total) * 100).toFixed(1)) : 0
+            }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 8); // Top 8 services
+    }, [filteredDataByMonth]);
+
+    const unsatisfiedDemand = useMemo(() => {
+        const criticalPatients = filteredDataByMonth.filter(ic => 
+            ['1', '2', '3'].includes(ic.priority || '')
+        );
+        
+        const totalCritical = criticalPatients.filter(ic => 
+            ['pending', 'admitted'].includes(ic.status || '')
+        ).length;
+        
+        const pendingCritical = criticalPatients.filter(ic => 
+            ic.status === 'pending'
+        ).length;
+
+        if (totalCritical === 0) return 0;
+        return Number(((pendingCritical / totalCritical) * 100).toFixed(1));
+    }, [filteredDataByMonth]);
 
     const statsByDoctor = useMemo(() => {
         const stats: { [key: string]: { total: number, pending: number, completed: number, admitted: number } } = {};
@@ -65,6 +111,12 @@ const InterconsultasDashboard: React.FC = () => {
         const reportMonth = months[selectedMonth];
         const data = filteredDataByMonth.filter(ic => doctorName === 'all' ? true : ic.responders === doctorName);
 
+        // Calculate Demanda Insatisfecha for this specific context (all month or doctor-specific)
+        const critical = data.filter(ic => ['1', '2', '3'].includes(ic.priority || ''));
+        const totalCrit = critical.filter(ic => ['pending', 'admitted'].includes(ic.status || '')).length;
+        const pendCrit = critical.filter(ic => ic.status === 'pending').length;
+        const unsatDemand = totalCrit > 0 ? ((pendCrit / totalCrit) * 100).toFixed(1) : '0';
+
         // Header
         doc.setFontSize(20);
         doc.setTextColor(63, 81, 181);
@@ -75,6 +127,7 @@ const InterconsultasDashboard: React.FC = () => {
         doc.text(`Médico: ${doctorName === 'all' ? 'Todos los Médicos' : doctorName}`, 14, 32);
         doc.text(`Periodo: ${reportMonth} ${new Date().getFullYear()}`, 14, 38);
         doc.text(`Total Interconsultas: ${data.length}`, 14, 44);
+        doc.text(`Demanda Insatisfecha (P1-P3): ${unsatDemand}%`, 14, 50);
 
         const tableBody = data.map(ic => [
             new Date(ic.created_at).toLocaleDateString('es-PE'),
@@ -87,7 +140,7 @@ const InterconsultasDashboard: React.FC = () => {
         ]);
 
         autoTable(doc, {
-            startY: 52,
+            startY: 58,
             head: [['Fecha', 'Paciente', 'HC', 'Origen', 'Problema/Motivo', 'Prioridad', 'Estado']],
             body: tableBody,
             theme: 'grid',
@@ -112,7 +165,7 @@ const InterconsultasDashboard: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#f8f9fc] flex flex-col font-sans text-slate-900">
+        <div className="min-h-screen bg-[#f8f9fc] flex flex-col font-sans text-slate-900 overflow-x-hidden">
             {/* Header */}
             <header className="bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between sticky top-0 z-40 shadow-sm">
                 <div className="flex items-center gap-4">
@@ -144,27 +197,89 @@ const InterconsultasDashboard: React.FC = () => {
             </header>
 
             <main className="flex-1 p-8 max-w-[1600px] mx-auto w-full space-y-8">
-                {/* Metric Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Total de ICs ({months[selectedMonth]})</p>
-                        <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.length}</h3>
+                {/* Metric Cards Row */}
+                <div className="flex flex-col lg:flex-row gap-8">
+                    {/* Metrics Left */}
+                    <div className="w-full lg:w-1/3 grid grid-cols-2 gap-4">
+                        <div className="col-span-2 bg-gradient-to-br from-indigo-600 to-indigo-700 p-7 rounded-[32px] border border-indigo-500 shadow-xl shadow-indigo-100/50 text-white relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-20">
+                                    <path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                                </svg>
+                            </div>
+                            <p className="text-[11px] font-black text-indigo-100 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                <span className="size-2 rounded-full bg-indigo-300 animate-pulse"></span>
+                                Demanda Insatisfecha
+                            </p>
+                            <div className="flex items-baseline gap-2">
+                                <h3 className="text-5xl font-black tracking-tighter">{unsatisfiedDemand}%</h3>
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-bold text-indigo-200 uppercase tracking-tighter leading-none mb-1">Pacientes P1-P3</span>
+                                    <span className="text-[9px] font-medium text-indigo-200/60 leading-tight">Pendientes vs Total Admisión</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Total de ICs</p>
+                            <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.length}</h3>
+                        </div>
+                        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                            <p className="text-[10px] font-black text-amber-500 uppercase tracking-wider mb-1">Pendientes</p>
+                            <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.filter(i => i.status === 'pending').length}</h3>
+                        </div>
+                        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                            <p className="text-[10px] font-black text-green-500 uppercase tracking-wider mb-1">Admitidos</p>
+                            <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.filter(i => i.status === 'admitted').length}</h3>
+                        </div>
+                        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1">Completados</p>
+                            <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.filter(i => i.status === 'completed').length}</h3>
+                        </div>
                     </div>
-                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                        <p className="text-[10px] font-black text-amber-500 uppercase tracking-wider mb-1">Pendientes de Ingreso</p>
-                        <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.filter(i => i.status === 'pending').length}</h3>
-                    </div>
-                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                        <p className="text-[10px] font-black text-green-500 uppercase tracking-wider mb-1">Admitidos</p>
-                        <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.filter(i => i.status === 'admitted').length}</h3>
-                    </div>
-                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                        <p className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1">Completados</p>
-                        <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.filter(i => i.status === 'completed').length}</h3>
+
+                    {/* Bar Chart Right */}
+                    <div className="w-full lg:flex-1 bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm">
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h2 className="text-lg font-black text-slate-800">Origen por Servicio</h2>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Top 8 servicios demandantes</p>
+                            </div>
+                        </div>
+                        
+                        <div className="h-[200px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                    layout="vertical"
+                                    data={servicesDistribution}
+                                    margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                                    <XAxis type="number" hide />
+                                    <YAxis 
+                                        dataKey="name" 
+                                        type="category" 
+                                        axisLine={false} 
+                                        tickLine={false} 
+                                        width={100}
+                                        tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }}
+                                    />
+                                    <Tooltip 
+                                        cursor={{ fill: '#f8fafc' }}
+                                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
+                                        formatter={(value: any, name: any, props: any) => [`${value} ICs (${props.payload.percentage}%)`, 'Cantidad']}
+                                    />
+                                    <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={20}>
+                                        {servicesDistribution.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
                     </div>
                 </div>
 
-                {/* Main Content Area */}
+                {/* Table Area */}
                 <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
                     <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                         <h2 className="text-lg font-black text-slate-800">Estadísticas por Médico Evaluador</h2>
@@ -241,3 +356,4 @@ const InterconsultasDashboard: React.FC = () => {
 };
 
 export default InterconsultasDashboard;
+
