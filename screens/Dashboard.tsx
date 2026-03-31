@@ -31,15 +31,19 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const activePatients = useMemo(() => {
+    return patients.filter(p => p.status === 'active' || !p.status); // Fallback !p.status for older entries
+  }, [patients]);
+
   const filteredPatients = useMemo(() => {
     if (filter === 'critical') {
-      return patients.filter(p => p.acuity === Acuity.HIGH);
+      return activePatients.filter(p => p.acuity === Acuity.HIGH);
     }
     if (filter === 'history') {
-      return []; // Placeholder for history view being empty or different
+      return patients.filter(p => ['discharged', 'deceased', 'transferred'].includes(p.status!));
     }
-    return patients;
-  }, [patients, filter]);
+    return activePatients;
+  }, [patients, activePatients, filter]);
 
   useEffect(() => {
     fetchPatients();
@@ -208,9 +212,9 @@ const Dashboard: React.FC = () => {
               <div>
                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Ocupación Total</p>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-black text-slate-900 tracking-tight">{patients.length}/18</span>
+                  <span className="text-4xl font-black text-slate-900 tracking-tight">{activePatients.length}/18</span>
                   <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                    {Math.round((patients.length / 18) * 100)}%
+                    {Math.round((activePatients.length / 18) * 100)}%
                   </span>
                 </div>
               </div>
@@ -219,7 +223,7 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
             <div className="w-full bg-slate-100 h-2.5 rounded-full mt-6 overflow-hidden">
-              <div className="bg-primary h-full rounded-full shadow-[0_0_8px_rgba(19,91,236,0.3)] transition-all duration-1000" style={{ width: `${(patients.length / 18) * 100}%` }}></div>
+              <div className="bg-primary h-full rounded-full shadow-[0_0_8px_rgba(19,91,236,0.3)] transition-all duration-1000" style={{ width: `${(activePatients.length / 18) * 100}%` }}></div>
             </div>
           </div>
 
@@ -232,17 +236,17 @@ const Dashboard: React.FC = () => {
             </div>
             <div className="flex items-center justify-between">
               <div className="flex flex-col items-center">
-                <span className="text-2xl font-black text-acuity-high">{patients.filter(p => p.acuity === Acuity.HIGH).length}</span>
+                <span className="text-2xl font-black text-acuity-high">{activePatients.filter(p => p.acuity === Acuity.HIGH).length}</span>
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Alta</span>
               </div>
               <div className="h-10 w-px bg-slate-100"></div>
               <div className="flex flex-col items-center">
-                <span className="text-2xl font-black text-acuity-mod">{patients.filter(p => p.acuity === Acuity.MOD).length}</span>
+                <span className="text-2xl font-black text-acuity-mod">{activePatients.filter(p => p.acuity === Acuity.MOD).length}</span>
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Media</span>
               </div>
               <div className="h-10 w-px bg-slate-100"></div>
               <div className="flex flex-col items-center">
-                <span className="text-2xl font-black text-acuity-stable">{patients.filter(p => p.acuity === Acuity.STABLE).length}</span>
+                <span className="text-2xl font-black text-acuity-stable">{activePatients.filter(p => p.acuity === Acuity.STABLE).length}</span>
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Estable</span>
               </div>
             </div>
@@ -298,11 +302,11 @@ const Dashboard: React.FC = () => {
                 {patients.some(p => p.allergies?.length > 0 || p.physicalExam?.infectious?.antibiotic) ? (
                   <>
                     <p className="text-4xl font-black text-slate-900 tracking-tight">
-                      {patients.filter(p => p.allergies?.length > 0 || p.physicalExam?.infectious?.antibiotic).length}
+                      {activePatients.filter(p => p.allergies?.length > 0 || p.physicalExam?.infectious?.antibiotic).length}
                     </p>
                     <div className="mt-2 space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
                       {/* Alergias */}
-                      {patients.filter(p => p.allergies?.length > 0).map(p => (
+                      {activePatients.filter(p => p.allergies?.length > 0).map(p => (
                         <div key={`allergy-${p.id}`} className="text-[11px] leading-tight text-red-600 font-medium bg-red-50 p-1.5 rounded border border-red-100 flex items-start gap-1">
                           <span className="material-symbols-outlined text-[14px] shrink-0 mt-0.5">warning</span>
                           <div>
@@ -311,7 +315,7 @@ const Dashboard: React.FC = () => {
                         </div>
                       ))}
                       {/* Antibióticos */}
-                      {patients.filter(p => p.physicalExam?.infectious?.antibiotic).map(p => (
+                      {activePatients.filter(p => p.physicalExam?.infectious?.antibiotic).map(p => (
                         <div key={`atb-${p.id}`} className="text-[11px] leading-tight text-blue-600 font-medium bg-blue-50 p-1.5 rounded border border-blue-100 flex items-start gap-1">
                           <span className="material-symbols-outlined text-[14px] shrink-0 mt-0.5 text-blue-500">medication</span>
                           <div>
