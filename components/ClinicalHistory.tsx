@@ -132,6 +132,8 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 marital_status: data.physical_exam?.clinical_extras?.marital_status || '',
                 religion: data.physical_exam?.clinical_extras?.religion || '',
                 occupation: data.physical_exam?.clinical_extras?.occupation || '',
+                health_problems: data.physical_exam?.clinical_extras?.health_problems || '',
+                plan: data.physical_exam?.clinical_extras?.plan || '',
             }));
         }
         setLoading(false);
@@ -151,7 +153,9 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                     marital_status: patientData.marital_status,
                     religion: patientData.religion,
                     occupation: patientData.occupation,
-                    illness_course: patientData.illness_course
+                    illness_course: patientData.illness_course,
+                    health_problems: patientData.health_problems,
+                    plan: patientData.plan
                 }
             };
 
@@ -194,7 +198,9 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                     marital_status: patientData.marital_status,
                     religion: patientData.religion,
                     occupation: patientData.occupation,
-                    illness_course: patientData.illness_course
+                    illness_course: patientData.illness_course,
+                    health_problems: patientData.health_problems,
+                    plan: patientData.plan
                 }
             };
             
