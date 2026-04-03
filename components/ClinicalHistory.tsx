@@ -75,14 +75,26 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
             chronic_health: {
                 enabled: false,
                 type: 'non_operative'
+            },
+            vasopressors: 'none', // none, map_under_70, low_dose, med_dose, high_dose
+            charlson: {
+                age_points: 0,
+                mi: false, chf: false, pvd: false, cva_tia: false, dementia: false,
+                copd: false, ctd: false, pud: false, mild_liver: false, dm_no_comp: false,
+                dm_comp: false, hemiplegia: false, renal_disease: false, tumor: false,
+                leukemia: false, lymphoma: false, mod_severe_liver: false,
+                metastatic_tumor: false, aids: false
             }
         },
         // Problemas
         health_problems: '',
         // Plan
         plan: '',
-        apache_score: null
+        apache_score: null,
+        sofa_score: null,
+        charlson_score: null
     });
+
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -216,6 +228,105 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
         return score;
     };
 
+    const calculateSOFA = (data: any) => {
+        const parseNum = (val: any) => isNaN(parseFloat(val)) ? null : parseFloat(val);
+        let score = 0;
+        const aps = data.physical_exam || {};
+        
+        // 1. Respiration (PaO2/FiO2)
+        const pafio2 = parseNum(aps.respiratory?.pafio2);
+        if (pafio2 !== null) {
+            if (pafio2 < 100) score += 4;
+            else if (pafio2 < 200) score += 3;
+            else if (pafio2 < 300) score += 2;
+            else if (pafio2 < 400) score += 1;
+        }
+
+        // 2. Coagulation (Platelets) x10^3
+        const plaq = parseNum(aps.hematology?.plaq);
+        if (plaq !== null) {
+            if (plaq < 20000) score += 4;
+            else if (plaq < 50000) score += 3;
+            else if (plaq < 100000) score += 2;
+            else if (plaq < 150000) score += 1;
+        }
+
+        // 3. Liver (Bilirubin mg/dL)
+        const bt = parseNum(aps.metabolic?.bt);
+        if (bt !== null) {
+            if (bt >= 12.0) score += 4;
+            else if (bt >= 6.0) score += 3;
+            else if (bt >= 2.0) score += 2;
+            else if (bt >= 1.2) score += 1;
+        }
+
+        // 4. Cardiovascular (Hypotension / Vasopressors)
+        const vp = aps.vasopressors || 'none';
+        if (vp === 'high_dose') score += 4;
+        else if (vp === 'med_dose') score += 3;
+        else if (vp === 'low_dose') score += 2;
+        else if (vp === 'map_under_70') score += 1;
+
+        // 5. CNS (Glasgow)
+        const gcs = parseNum(aps.glasgow) || 15;
+        if (gcs < 6) score += 4;
+        else if (gcs <= 9) score += 3;
+        else if (gcs <= 12) score += 2;
+        else if (gcs <= 14) score += 1;
+
+        // 6. Renal (Creatinine mg/dL)
+        const cre = parseNum(aps.renal?.creatinine);
+        if (cre !== null) {
+            if (cre >= 5.0) score += 4;
+            else if (cre >= 3.5) score += 3;
+            else if (cre >= 2.0) score += 2;
+            else if (cre >= 1.2) score += 1;
+        }
+
+        return score;
+    };
+
+    const calculateCharlson = (data: any) => {
+        let score = 0;
+        const char = data.physical_exam?.charlson || {};
+        
+        // Age points: 1 pt for each decade > 40
+        const ageNum = parseInt(data.age);
+        if (!isNaN(ageNum) && ageNum > 40) {
+            score += Math.floor((ageNum - 40) / 10);
+        }
+
+        // 1 pt each
+        if (char.mi) score += 1;
+        if (char.chf) score += 1;
+        if (char.pvd) score += 1;
+        if (char.cva_tia) score += 1;
+        if (char.dementia) score += 1;
+        if (char.copd) score += 1;
+        if (char.ctd) score += 1;
+        if (char.pud) score += 1;
+        if (char.mild_liver) score += 1;
+        if (char.dm_no_comp) score += 1;
+
+        // 2 pts each
+        if (char.dm_comp) score += 2;
+        if (char.hemiplegia) score += 2;
+        if (char.renal_disease) score += 2;
+        if (char.tumor) score += 2;
+        if (char.leukemia) score += 2;
+        if (char.lymphoma) score += 2;
+
+        // 3 pts
+        if (char.mod_severe_liver) score += 3;
+
+        // 6 pts
+        if (char.metastatic_tumor) score += 6;
+        if (char.aids) score += 6;
+
+        return score;
+    };
+
+
 
     useEffect(() => {
         if (patientId === 'new') {
@@ -271,8 +382,11 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 occupation: data.physical_exam?.clinical_extras?.occupation || '',
                 health_problems: data.physical_exam?.clinical_extras?.health_problems || '',
                 plan: data.physical_exam?.clinical_extras?.plan || '',
-                apache_score: data.apache_score || null
+                apache_score: data.apache_score || null,
+                sofa_score: data.sofa_score || null,
+                charlson_score: data.charlson_score || null
             }));
+
 
         }
         setLoading(false);
@@ -281,6 +395,35 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
     const handleChange = (field: string, value: any) => {
         setPatientData((prev: any) => ({ ...prev, [field]: value }));
     };
+
+    const handlePhyChange = (section: string, field: string, value: any) => {
+        setPatientData((prev: any) => {
+            const newPhy = { ...(prev.physical_exam || {}) };
+            if (section) {
+                newPhy[section] = {
+                    ...(newPhy[section] || {}),
+                    [field]: value
+                };
+            } else {
+                newPhy[field] = value;
+            }
+            return {
+                ...prev,
+                physical_exam: newPhy
+            };
+        });
+    };
+
+    const handlePhyTextChange = (field: string, value: any) => {
+        setPatientData((prev: any) => ({
+            ...prev,
+            physical_exam: {
+                ...(prev.physical_exam || {}),
+                [field]: value
+            }
+        }));
+    };
+
 
     const handleSave = async () => {
         setSaving(true);
@@ -315,8 +458,11 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 admit_date: patientData.hospital_admission,
                 physical_exam: physicalExamPayload, // Save structured data
                 allergies: patientData.allergies ? patientData.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s !== '') : [],
-                apache_score: apacheScore
+                apache_score: calculateApacheII(patientData),
+                sofa_score: calculateSOFA(patientData),
+                charlson_score: calculateCharlson(patientData)
             };
+
 
 
             // Warning: The ClinicalHistory form DOES NOT have Bed or HC inputs currently.
@@ -364,8 +510,11 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                     admit_date: patientData.hospital_admission,
                     physical_exam: physicalExamPayload,
                     allergies: patientData.allergies ? patientData.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s !== '') : [],
-                    apache_score: apacheScore
+                    apache_score: calculateApacheII(patientData),
+                    sofa_score: calculateSOFA(patientData),
+                    charlson_score: calculateCharlson(patientData)
                 }).eq('id', patientId);
+
 
 
                 if (error) throw error;
@@ -652,6 +801,57 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 </div>
             </div>
 
+            {/* Índice de Charlson Checklist */}
+            <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                    <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                        <span className="material-symbols-outlined text-indigo-600">list_alt</span>
+                        Índice de Comorbilidad de Charlson
+                    </h4>
+                    <div className="bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-black">
+                        Puntos: {calculateCharlson(patientData)}
+                    </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-2 gap-x-6">
+                    {[
+                        { key: 'mi', label: 'Infarto Miocardio', pts: 1 },
+                        { key: 'chf', label: 'Insuf. Cardiaca', pts: 1 },
+                        { key: 'pvd', label: 'Enf. Vascular Perif.', pts: 1 },
+                        { key: 'cva_tia', label: 'ACV o TIA', pts: 1 },
+                        { key: 'dementia', label: 'Demencia', pts: 1 },
+                        { key: 'copd', label: 'EPOC / Pulmonar', pts: 1 },
+                        { key: 'ctd', label: 'Enf. Tejido Conectivo', pts: 1 },
+                        { key: 'pud', label: 'Enf. Úlcera Péptica', pts: 1 },
+                        { key: 'mild_liver', label: 'Enf. Hepática Leve', pts: 1 },
+                        { key: 'dm_no_comp', label: 'Diabetes sin daño', pts: 1 },
+                        { key: 'dm_comp', label: 'Diabetes con daño', pts: 2 },
+                        { key: 'hemiplegia', label: 'Hemiplejía', pts: 2 },
+                        { key: 'renal_disease', label: 'Enf. Renal Mod/Sev', pts: 2 },
+                        { key: 'tumor', label: 'Tumor sólido', pts: 2 },
+                        { key: 'leukemia', label: 'Leucemia', pts: 2 },
+                        { key: 'lymphoma', label: 'Linfoma', pts: 2 },
+                        { key: 'mod_severe_liver', label: 'Enf. Hepática Mod/Sev', pts: 3 },
+                        { key: 'metastatic_tumor', label: 'Tumor Metastásico', pts: 6 },
+                        { key: 'aids', label: 'SIDA', pts: 6 },
+                    ].map(item => (
+                        <label key={item.key} className="flex items-center gap-3 cursor-pointer group">
+                            <input
+                                type="checkbox"
+                                checked={patientData.physical_exam?.charlson?.[item.key] || false}
+                                onChange={e => handlePhyChange('charlson', item.key, e.target.checked)}
+                                className="rounded text-indigo-600 focus:ring-indigo-500 size-4 border-slate-300"
+                            />
+                            <div className="flex justify-between flex-1 items-center">
+                                <span className="text-xs text-slate-600 group-hover:text-slate-900 transition-colors">{item.label}</span>
+                                <span className="text-[10px] font-bold text-slate-400">+{item.pts}</span>
+                            </div>
+                        </label>
+                    ))}
+                </div>
+            </div>
+
+
             <div className="bg-red-50 p-4 rounded-xl border border-red-200">
                 <h4 className="text-sm font-bold text-red-700 mb-3 flex items-center gap-2">
                     <span className="material-symbols-outlined text-lg">warning</span>
@@ -891,30 +1091,8 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
     );
 
     const renderPhysicalExam = () => {
-        const handlePhyChange = (section: string, field: string, value: string) => {
-            setPatientData((prev: any) => ({
-                ...prev,
-                physical_exam: {
-                    ...prev.physical_exam,
-                    [section]: {
-                        ...prev.physical_exam[section],
-                        [field]: value
-                    }
-                }
-            }));
-        };
-
-        const handlePhyTextChange = (field: string, value: string) => {
-            setPatientData((prev: any) => ({
-                ...prev,
-                physical_exam: {
-                    ...prev.physical_exam,
-                    [field]: value
-                }
-            }));
-        };
-
         const renderInput = (label: string, section: string, field: string, placeholder = '', width = '', type: 'text' | 'number' = 'number') => (
+
             <PhysicalExamInput
                 label={label}
                 value={patientData.physical_exam?.[section]?.[field] || ''}
@@ -974,7 +1152,23 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
 
                 {/* Cardiovascular */}
                 <div className="bg-white p-4 rounded-xl border border-slate-200">
-                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-2">Cardiovascular</h4>
+                    <div className="flex justify-between items-center mb-3">
+                        <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">Cardiovascular</h4>
+                        <div className="bg-rose-50 px-3 py-1 rounded-lg border border-rose-100 flex items-center gap-3">
+                            <span className="text-[10px] font-black text-rose-600 uppercase">Vasopresores:</span>
+                            <select 
+                                value={patientData.physical_exam?.vasopressors || 'none'}
+                                onChange={(e) => handlePhyChange('', 'vasopressors', e.target.value)}
+                                className="bg-transparent border-none text-[10px] font-bold text-rose-700 focus:ring-0 p-0 cursor-pointer"
+                            >
+                                <option value="none">Sin Vasopresores (PAM {'>'}=70)</option>
+                                <option value="map_under_70">PAM {'<'} 70 mmHg</option>
+                                <option value="low_dose">Dopa {'<'} 5 / Dobuta / Nore-Epi {'<'} 0.1</option>
+                                <option value="med_dose">Dopa {'>'} 5 / Nore-Epi {'<'} 0.1</option>
+                                <option value="high_dose">Dopa {'>'} 15 / Nore-Epi {'>'} 0.1</option>
+                            </select>
+                        </div>
+                    </div>
                     <textarea
                         value={patientData.physical_exam?.cardiovascular || ''}
                         onChange={(e) => handlePhyTextChange('cardiovascular', e.target.value)}
@@ -982,6 +1176,7 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                         placeholder="Ruidos cardiacos, llenado capilar, edemas, perfusión..."
                     />
                 </div>
+
 
                 {/* Respiratorio */}
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
@@ -1263,20 +1458,35 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 </div>
                 
                 <div className="space-y-4">
-                    <div className="bg-indigo-600 rounded-2xl p-6 text-white shadow-lg border border-indigo-400 overflow-hidden relative group">
-                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <span className="material-symbols-outlined text-6xl">analytics</span>
+                    {/* APACHE II */}
+                    <div className="bg-indigo-600 rounded-2xl p-5 text-white shadow-lg border border-indigo-400 overflow-hidden relative group">
+                        <h5 className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 text-indigo-200">APACHE II</h5>
+                        <div className="flex items-baseline gap-2">
+                            <div className="text-4xl font-black tracking-tighter mb-1">{calculateApacheII(patientData)}</div>
+                            <div className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tight ${
+                                calculateApacheII(patientData) > 25 ? 'bg-red-500 text-white' : 
+                                calculateApacheII(patientData) > 15 ? 'bg-amber-400 text-indigo-900' : 'bg-emerald-400 text-indigo-900'
+                            }`}>
+                                {calculateApacheII(patientData) > 25 ? 'Muy Alto' : calculateApacheII(patientData) > 15 ? 'Moderado' : 'Bajo'}
+                            </div>
                         </div>
-                        <h5 className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 text-indigo-200">Score APACHE II</h5>
-                        <div className="text-5xl font-black tracking-tighter mb-1">{calculateApacheII(patientData)}</div>
-                        <div className="text-[10px] font-bold text-indigo-100 uppercase opacity-80 mb-4">Puntos Calculados</div>
-                        
-                        <div className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tight ${
-                            calculateApacheII(patientData) > 25 ? 'bg-red-500 text-white' : 
-                            calculateApacheII(patientData) > 15 ? 'bg-amber-400 text-indigo-900' : 'bg-emerald-400 text-indigo-900'
-                        }`}>
-                            {calculateApacheII(patientData) > 25 ? 'Riesgo Muy Alto' : 
-                             calculateApacheII(patientData) > 15 ? 'Riesgo Moderado' : 'Riesgo Bajo'}
+                    </div>
+
+                    {/* SOFA Score */}
+                    <div className="bg-slate-800 rounded-2xl p-5 text-white shadow-lg border border-slate-600 overflow-hidden relative group">
+                        <h5 className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 text-slate-400">SOFA Score</h5>
+                        <div className="flex items-baseline gap-2">
+                            <div className="text-4xl font-black tracking-tighter mb-1">{calculateSOFA(patientData)}</div>
+                            <div className="text-[9px] font-bold text-slate-400 uppercase opacity-80">Falla Orgánica</div>
+                        </div>
+                    </div>
+
+                    {/* Charlson Index */}
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-md overflow-hidden relative group">
+                        <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Índice de Charlson</h5>
+                        <div className="flex items-baseline gap-2">
+                            <div className="text-4xl font-black text-slate-800 tracking-tighter mb-1">{calculateCharlson(patientData)}</div>
+                            <div className="text-[9px] font-bold text-slate-400 uppercase">Comorbilidades</div>
                         </div>
                     </div>
 
@@ -1296,6 +1506,7 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                         </select>
                     </div>
                 </div>
+
             </div>
         </div >
     );

@@ -25,7 +25,11 @@ export interface Patient {
   outcome?: string;
   lastClinicalUpdate?: string;
   physicalExam?: any;
+  apache_score?: number;
+  sofa_score?: number;
+  charlson_score?: number;
 }
+
 
 export interface VitalSign {
   time: string;

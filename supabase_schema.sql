@@ -53,8 +53,11 @@ create table public.patients (
   onset text,
   anamnesis_text text,
   physical_exam jsonb default '{}'::jsonb,
-  apache_score numeric
+  apache_score numeric,
+  sofa_score numeric,
+  charlson_score numeric
 );
+
 
 
 -- Set up RLS for Patients

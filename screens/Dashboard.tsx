@@ -96,8 +96,12 @@ const Dashboard: React.FC = () => {
           nurseAvatar: p.nurse_avatar || `https://i.pravatar.cc/150?u=${p.id}`,
           generalStatus: p.general_status,
           lastClinicalUpdate: p.last_clinical_update,
-          physicalExam: p.physical_exam
+          physicalExam: p.physical_exam,
+          apache_score: p.apache_score,
+          sofa_score: p.sofa_score,
+          charlson_score: p.charlson_score
         }));
+
         setPatients(mappedPatients);
       }
     } catch (error) {
@@ -406,6 +410,30 @@ const Dashboard: React.FC = () => {
                       {p.generalStatus ? p.generalStatus : '\u00A0'}
                     </p>
                   </div>
+
+                  {/* Scores Clínicos - Dashboard View */}
+                  <div className="grid grid-cols-3 gap-1.5 mt-2">
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-1.5 flex flex-col items-center">
+                        <span className="text-[8px] font-black text-indigo-400 uppercase tracking-tighter">APA II</span>
+                        <span className={`text-sm font-black ${p.apache_score && p.apache_score > 15 ? 'text-red-600' : 'text-indigo-700'}`}>
+                            {p.apache_score !== null && p.apache_score !== undefined ? p.apache_score : '--'}
+                        </span>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-1.5 flex flex-col items-center">
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">SOFA</span>
+                        <span className="text-sm font-black text-slate-800">
+                            {p.sofa_score !== null && p.sofa_score !== undefined ? p.sofa_score : '--'}
+                        </span>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-1.5 flex flex-col items-center">
+                        <span className="text-[8px] font-black text-emerald-500 uppercase tracking-tighter">CHARL</span>
+                        <span className="text-sm font-black text-emerald-700">
+                            {p.charlson_score !== null && p.charlson_score !== undefined ? p.charlson_score : '--'}
+                        </span>
+                    </div>
+
+                  </div>
+
                   <div className="flex items-center gap-2 mt-2">
                     {p.lastClinicalUpdate ? (
                       <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
