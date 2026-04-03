@@ -75,8 +75,7 @@ const InterconsultasDashboard: React.FC = () => {
     const priorityByService = useMemo(() => {
         const counts: { [key: string]: { name: string, P1: number, P2: number, P3: number, total: number } } = {};
         filteredDataByMonth.forEach(ic => {
-            if (ic.status === 'pending') return; // respondidas
-            if (!['1', '2', '3'].includes(ic.priority || '')) return; // con prioridad 1, 2, 3
+            if (!['1', '2', '3'].includes(ic.priority || '')) return; // solo con prioridad 1, 2, 3
             
             const origin = ic.service_origin || 'Otro/No especificado';
             if (!counts[origin]) counts[origin] = { name: origin, P1: 0, P2: 0, P3: 0, total: 0 };
@@ -86,14 +85,14 @@ const InterconsultasDashboard: React.FC = () => {
 
         return Object.values(counts)
             .sort((a, b) => b.total - a.total)
-            .slice(0, 8);
+            .slice(0, 4); // Top 4 servicios más consultados
     }, [filteredDataByMonth]);
 
     const doctorResponses = useMemo(() => {
         const counts: { [key: string]: number } = {};
         let total = 0;
         filteredDataByMonth.forEach(ic => {
-            if (ic.responders && ic.status !== 'pending') {
+            if (ic.responders) {
                 counts[ic.responders] = (counts[ic.responders] || 0) + 1;
                 total++;
             }
@@ -382,7 +381,7 @@ const InterconsultasDashboard: React.FC = () => {
                         <div className="flex items-start justify-between mb-6">
                             <div>
                                 <h2 className="text-lg font-black text-slate-800">Prioridad por Servicio</h2>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Respondidas (P1, P2, P3)</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Top 4 servicios (P1, P2, P3)</p>
                             </div>
                             <button 
                                 onClick={() => downloadChartPDF('priority')}
