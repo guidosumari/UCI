@@ -52,12 +52,13 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
         physical_exam: {
             vital_signs: { pa: '', pam: '', spo2: '', etco2: '', weight: '', height: '', fr: '', fc: '', fio2: '', temp: '', pid: '', imc: '' },
             neurologic: '',
+            glasgow: 15,
             respiratory: {
                 description: '', interface: '', fio2: '', pc: '', ppico: '', t_ins: '', vci: '', po2: '', pco2: '',
                 fr: '', peep: '', ie: '', cdin: '', vce: '', pafio2: '', gaa: ''
             },
             cardiovascular: '',
-            renal: { urea: '', creatinine: '', fg: '', bh: '' },
+            renal: { urea: '', creatinine: '', fg: '', bh: '', acute_renal_failure: false },
             metabolic: {
                 na: '', k: '', cl: '', cai: '', cas: '', p: '', mg: '',
                 ph: '', hco3: '', eb: '', glu: '', lact: '', osmo: '',
@@ -70,15 +71,151 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 hma: '', leu: '', ab: '', seg: '', linf: '', lce: '',
                 perf_coag: '', tp: '', inr: '', ttpa: '', tt: '', fib: ''
             },
-            infectious: { pcr: '', pct: '', antibiotic: '', cultures: '', antibiotic_days: '' }
+            infectious: { pcr: '', pct: '', antibiotic: '', cultures: '', antibiotic_days: '' },
+            chronic_health: {
+                enabled: false,
+                type: 'non_operative'
+            }
         },
         // Problemas
         health_problems: '',
         // Plan
-        plan: ''
+        plan: '',
+        apache_score: null
     });
+
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+
+    const calculateApacheII = (data: any) => {
+        const parseNum = (val: any) => {
+            if (val === null || val === undefined || val === '') return null;
+            const n = parseFloat(val);
+            return isNaN(n) ? null : n;
+        };
+        
+        let score = 0;
+        const aps = data.physical_exam || {};
+        const vs = aps.vital_signs || {};
+        const met = aps.metabolic || {};
+        const hem = aps.hematology || {};
+        const ren = aps.renal || {};
+        const resp = aps.respiratory || {};
+
+        // 1. Temp (C)
+        const temp = parseNum(vs.temp);
+        if (temp !== null) {
+            if (temp >= 41 || temp <= 29.9) score += 4;
+            else if (temp >= 39 || temp <= 31.9) score += 3;
+            else if (temp <= 33.9) score += 2;
+            else if (temp >= 38.5 || temp <= 35.9) score += 1;
+        }
+
+        // 2. MAP (mmHg)
+        const map = parseNum(vs.pam);
+        if (map !== null) {
+            if (map >= 160 || map <= 49) score += 4;
+            else if (map >= 130) score += 3;
+            else if (map >= 110 || map <= 69) score += 2;
+        }
+
+        // 3. Heart Rate
+        const hr = parseNum(vs.fc);
+        if (hr !== null) {
+            if (hr >= 180 || hr <= 39) score += 4;
+            else if (hr >= 140 || (hr >= 40 && hr <= 54)) score += 3;
+            else if (hr >= 110 || (hr >= 55 && hr <= 69)) score += 2;
+        }
+
+        // 4. Resp Rate
+        const rr = parseNum(vs.fr);
+        if (rr !== null) {
+            if (rr >= 50 || rr <= 5) score += 4;
+            else if (rr >= 35 || (rr >= 6 && rr <= 9)) score += 3;
+            else if (rr >= 25 || (rr >= 10 && rr <= 11)) score += 1;
+        }
+
+        // 5. pH (phiipinas)
+        const ph = parseNum(met.ph);
+        if (ph !== null) {
+            if (ph >= 7.7 || ph < 7.15) score += 4;
+            else if (ph >= 7.6 || (ph >= 7.15 && ph <= 7.24)) score += 3;
+            else if (ph >= 7.5 || (ph >= 7.25 && ph <= 7.32)) score += 2;
+        }
+
+        // 6. Sodium
+        const na = parseNum(met.na);
+        if (na !== null) {
+            if (na >= 180 || na <= 110) score += 4;
+            else if (na >= 160 || (na >= 111 && na <= 119)) score += 3;
+            else if (na >= 155 || (na >= 120 && na <= 129)) score += 2;
+            else if (na >= 150) score += 1;
+        }
+
+        // 7. Potassium
+        const k = parseNum(met.k);
+        if (k !== null) {
+            if (k >= 7 || k < 2.5) score += 4;
+            else if (k >= 6) score += 3;
+            else if (k <= 2.9) score += 2;
+            else if (k >= 5.5 || (k >= 3 && k <= 3.4)) score += 1;
+        }
+
+        // 8. Creatinine
+        const cre = parseNum(ren.creatinine);
+        if (cre !== null) {
+            let crePoints = 0;
+            if (cre >= 3.5) crePoints = 4;
+            else if (cre >= 2) crePoints = 3;
+            else if (cre >= 1.5 || cre < 0.6) crePoints = 2;
+            score += ren.acute_renal_failure ? (crePoints * 2) : crePoints;
+        }
+
+        // 9. Hematocrit
+        const hct = parseNum(hem.hto);
+        if (hct !== null) {
+            if (hct >= 60 || hct < 20) score += 4;
+            else if (hct >= 50 || (hct >= 20 && hct <= 29.9)) score += 2;
+            else if (hct >= 46) score += 1;
+        }
+
+        // 10. WBC count
+        const wbc = parseNum(hem.leu);
+        if (wbc !== null) {
+            if (wbc >= 40 || wbc < 1) score += 4;
+            else if (wbc >= 20 || (wbc >= 1 && wbc <= 2.9)) score += 3;
+            else if (wbc >= 15) score += 1;
+        }
+
+        // 11. Glasgow Coma Scale
+        const gcs = parseNum(aps.glasgow) || 15;
+        score += (15 - Math.max(3, Math.min(15, gcs)));
+
+        // 12. Oxygenation (Simplified PaO2 pts for FiO2 < 50%)
+        const po2 = parseNum(resp.po2);
+        if (po2 !== null) {
+            if (po2 < 55) score += 4;
+            else if (po2 <= 60) score += 3;
+            else if (po2 <= 70) score += 1;
+        }
+
+        // 13. Age
+        const ageNum = parseInt(data.age);
+        if (!isNaN(ageNum)) {
+            if (ageNum >= 75) score += 6;
+            else if (ageNum >= 65) score += 5;
+            else if (ageNum >= 55) score += 3;
+            else if (ageNum >= 45) score += 2;
+        }
+
+        // 14. Chronic Health
+        if (aps.chronic_health?.enabled) {
+            score += (aps.chronic_health.type === 'elective_post_op' ? 2 : 5);
+        }
+
+        return score;
+    };
+
 
     useEffect(() => {
         if (patientId === 'new') {
@@ -134,7 +271,9 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 occupation: data.physical_exam?.clinical_extras?.occupation || '',
                 health_problems: data.physical_exam?.clinical_extras?.health_problems || '',
                 plan: data.physical_exam?.clinical_extras?.plan || '',
+                apache_score: data.apache_score || null
             }));
+
         }
         setLoading(false);
     };
@@ -159,6 +298,8 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 }
             };
 
+            const apacheScore = calculateApacheII(patientData);
+
             // Create new patient
             const newPatient = {
                 name: patientData.name,
@@ -174,8 +315,9 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 admit_date: patientData.hospital_admission,
                 physical_exam: physicalExamPayload, // Save structured data
                 allergies: patientData.allergies ? patientData.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s !== '') : [],
-                // ... map other fields
+                apache_score: apacheScore
             };
+
 
             // Warning: The ClinicalHistory form DOES NOT have Bed or HC inputs currently.
             // I should add them if this is to be the primary creation form.
@@ -204,6 +346,8 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 }
             };
             
+            const apacheScore = calculateApacheII(patientData);
+            
             // Update existing
             try {
                 const { error } = await supabase.from('patients').update({
@@ -220,7 +364,9 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                     admit_date: patientData.hospital_admission,
                     physical_exam: physicalExamPayload,
                     allergies: patientData.allergies ? patientData.allergies.split(',').map((s: string) => s.trim()).filter((s: string) => s !== '') : [],
+                    apache_score: apacheScore
                 }).eq('id', patientId);
+
 
                 if (error) throw error;
                 alert('Datos de Historia Clínica Guardados.');
@@ -359,8 +505,9 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                     'Hematológico:', 
                     { content: `Hb ${getV('hematology', 'hb')}   Hto: ${getV('hematology', 'hto')}`, colSpan: 3 },
                     { content: `Plaquetas: ${getV('hematology', 'plaq')}`, colSpan: 2 },
-                    { content: `INR: ${getV('hematology', 'inr')}`, colSpan: 2 }
+                    { content: `Score APACHE II: ${calculateApacheII(patientData)}`, colSpan: 2, styles: { fontStyle: 'bold', textColor: [79, 70, 229] } }
                 ],
+
                 [
                     'Infeccioso:', { content: `Leuco ${getV('hematology', 'leu')}   PCR ${getV('infectious', 'pcr')}   PCT ${getV('infectious', 'pct')}`, colSpan: 7 }
                 ]
@@ -802,14 +949,28 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
 
                 {/* Neurológico */}
                 <div className="bg-white p-4 rounded-xl border border-slate-200">
-                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-2">Neurológico</h4>
+                    <div className="flex justify-between items-center mb-2">
+                        <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">Neurológico</h4>
+                        <div className="flex items-center gap-2">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">Glasgow (GCS):</label>
+                            <input 
+                                type="number" 
+                                min="3" 
+                                max="15" 
+                                value={patientData.physical_exam?.glasgow || 15}
+                                onChange={(e) => handlePhyChange('neurologic', 'glasgow', e.target.value)}
+                                className="w-12 border border-slate-200 rounded px-1 py-0.5 text-xs font-bold text-center"
+                            />
+                        </div>
+                    </div>
                     <textarea
                         value={patientData.physical_exam?.neurologic || ''}
                         onChange={(e) => handlePhyTextChange('neurologic', e.target.value)}
                         className="w-full border border-slate-200 rounded-lg p-2 text-xs min-h-[40px] resize-none"
-                        placeholder="Descripción neurológica (Glasgow, Pupilas, Sedación, Motor...)"
+                        placeholder="Descripción neurológica (Pupilas, Sedación, Motor...)"
                     />
                 </div>
+
 
                 {/* Cardiovascular */}
                 <div className="bg-white p-4 rounded-xl border border-slate-200">
@@ -871,6 +1032,7 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                                 {renderInput("G(A-a)", "respiratory", "gaa")}
                             </div>
                         )}
+
 
                         {(patientData.physical_exam?.respiratory?.interface === 'Ventilación no invasiva / CNAF') && (
                             <div className="md:col-span-12 lg:col-span-8 grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 animate-in fade-in slide-in-from-top-2">
@@ -1006,37 +1168,138 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                         </div>
                     </div>
                 </div>
+
+                {/* Score APACHE II & Chronic Health (Combined) */}
+                <div className="bg-indigo-50 p-5 rounded-2xl border border-indigo-100 shadow-sm mt-6">
+                    <div className="flex flex-col md:flex-row justify-between gap-6">
+                        <div className="flex-1">
+                            <h4 className="text-sm font-black text-indigo-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-indigo-600">health_metrics</span>
+                                APACHE II & Salud Crónica
+                            </h4>
+                            
+                            <div className="space-y-4">
+                                <label className="flex items-center gap-3 p-3 bg-white rounded-xl border border-indigo-100 cursor-pointer hover:bg-indigo-50/50 transition-colors">
+                                    <input 
+                                        type="checkbox"
+                                        checked={patientData.physical_exam?.chronic_health?.enabled || false}
+                                        onChange={(e) => handlePhyChange('chronic_health', 'enabled', e.target.checked)}
+                                        className="size-5 rounded text-indigo-600 focus:ring-indigo-500"
+                                    />
+                                    <div>
+                                        <span className="text-sm font-bold text-slate-700 block">Antecedente de Insuficiencia Orgánica Grave</span>
+                                        <span className="text-[10px] text-slate-500 leading-tight block">Cirrosis, ICC NYHA IV, EPOC severo, Diálisis crónica o Inmunocomprometido.</span>
+                                    </div>
+                                </label>
+
+                                {patientData.physical_exam?.chronic_health?.enabled && (
+                                    <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
+                                        <button 
+                                            onClick={() => handlePhyChange('chronic_health', 'type', 'non_operative')}
+                                            className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${patientData.physical_exam?.chronic_health?.type === 'non_operative' ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-500 border-slate-200'}`}
+                                        >
+                                            No Operado / Emergencia (+5 pts)
+                                        </button>
+                                        <button 
+                                            onClick={() => handlePhyChange('chronic_health', 'type', 'elective_post_op')}
+                                            className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${patientData.physical_exam?.chronic_health?.type === 'elective_post_op' ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-500 border-slate-200'}`}
+                                        >
+                                            Post-Op Electivo (+2 pts)
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div className="flex items-center gap-3 p-3 bg-red-50 rounded-xl border border-red-100">
+                                    <input 
+                                        type="checkbox"
+                                        checked={patientData.physical_exam?.renal?.acute_renal_failure || false}
+                                        onChange={(e) => handlePhyChange('renal', 'acute_renal_failure', e.target.checked)}
+                                        className="size-4 rounded text-red-600 focus:ring-red-500"
+                                    />
+                                    <span className="text-xs font-bold text-red-700">Falla Renal Aguda (Duplica puntos de Creatinina)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="w-full md:w-64 flex flex-col items-center justify-center bg-white rounded-2xl border border-indigo-200 p-6 shadow-inner">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Score APACHE II</span>
+                            <div className="text-6xl font-black text-indigo-600 tracking-tighter leading-none mb-2">
+                                {calculateApacheII(patientData)}
+                            </div>
+                            <div className="text-center">
+                                <div className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter ${
+                                    calculateApacheII(patientData) > 25 ? 'bg-red-100 text-red-600' : 
+                                    calculateApacheII(patientData) > 15 ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
+                                }`}>
+                                    {calculateApacheII(patientData) > 25 ? 'Riesgo Muy Alto' : 
+                                     calculateApacheII(patientData) > 15 ? 'Riesgo Moderado' : 'Riesgo Bajo'}
+                                </div>
+                                <p className="text-[9px] text-slate-400 mt-2 font-medium">Predice mortalidad intrahospitalaria</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
+
         );
     };
 
     const renderProblems = () => (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
-            <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Lista de Problemas de Salud</label>
-                <div className="bg-amber-50 rounded-lg p-3 text-xs text-amber-800 mb-2 border border-amber-100 font-medium">
-                    Liste los problemas activos e inactivos del paciente para el plan de atención.
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-3">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Lista de Problemas de Salud</label>
+                    <div className="bg-amber-50 rounded-lg p-3 text-xs text-amber-800 mb-2 border border-amber-100 font-medium">
+                        Liste los problemas activos e inactivos del paciente para el plan de atención.
+                    </div>
+                    <div className="relative">
+                        <textarea
+                            value={patientData.health_problems}
+                            onChange={e => handleChange('health_problems', e.target.value)}
+                            className="w-full border border-slate-200 rounded-xl p-4 text-sm min-h-[300px] leading-relaxed resize-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            placeholder="1. Insuficiencia Respiratoria Aguda&#10;2. Shock Séptico..."
+                        ></textarea>
+                    </div>
                 </div>
-                <div className="relative">
-                    <textarea
-                        value={patientData.health_problems}
-                        onChange={e => handleChange('health_problems', e.target.value)}
-                        className="w-full border border-slate-200 rounded-xl p-4 text-sm min-h-[300px] leading-relaxed resize-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                        placeholder="1. Insuficiencia Respiratoria Aguda&#10;2. Shock Séptico..."
-                    ></textarea>
-                </div>
-            </div>
+                
+                <div className="space-y-4">
+                    <div className="bg-indigo-600 rounded-2xl p-6 text-white shadow-lg border border-indigo-400 overflow-hidden relative group">
+                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <span className="material-symbols-outlined text-6xl">analytics</span>
+                        </div>
+                        <h5 className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 text-indigo-200">Score APACHE II</h5>
+                        <div className="text-5xl font-black tracking-tighter mb-1">{calculateApacheII(patientData)}</div>
+                        <div className="text-[10px] font-bold text-indigo-100 uppercase opacity-80 mb-4">Puntos Calculados</div>
+                        
+                        <div className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tight ${
+                            calculateApacheII(patientData) > 25 ? 'bg-red-500 text-white' : 
+                            calculateApacheII(patientData) > 15 ? 'bg-amber-400 text-indigo-900' : 'bg-emerald-400 text-indigo-900'
+                        }`}>
+                            {calculateApacheII(patientData) > 25 ? 'Riesgo Muy Alto' : 
+                             calculateApacheII(patientData) > 15 ? 'Riesgo Moderado' : 'Riesgo Bajo'}
+                        </div>
+                    </div>
 
-            <div className="mt-4">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Estado de Gravedad</label>
-                <select value={patientData.acuity} onChange={e => handleChange('acuity', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 font-bold bg-slate-50">
-                    <option value="ESTABLE">Estable</option>
-                    <option value="MEDIA">Crítico Estabilizado (Media)</option>
-                    <option value="ALTA">Crítico Inestable (Alta)</option>
-                </select>
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Estado de Gravedad</label>
+                        <select 
+                            value={patientData.acuity} 
+                            onChange={e => handleChange('acuity', e.target.value)} 
+                            className={`w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
+                                patientData.acuity === 'ALTA' ? 'bg-red-50 text-red-600' : 
+                                patientData.acuity === 'MEDIA' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
+                            }`}
+                        >
+                            <option value="ESTABLE">Estable</option>
+                            <option value="MEDIA">Crítico Estabilizado (Media)</option>
+                            <option value="ALTA">Crítico Inestable (Alta)</option>
+                        </select>
+                    </div>
+                </div>
             </div>
         </div >
     );
+
 
     const renderPlan = () => (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">

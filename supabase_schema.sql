@@ -52,8 +52,10 @@ create table public.patients (
   symptoms text,
   onset text,
   anamnesis_text text,
-  physical_exam jsonb default '{}'::jsonb
+  physical_exam jsonb default '{}'::jsonb,
+  apache_score numeric
 );
+
 
 -- Set up RLS for Patients
 alter table public.patients enable row level security;
