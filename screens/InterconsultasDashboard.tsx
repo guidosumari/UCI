@@ -14,7 +14,8 @@ import {
     Tooltip, 
     ResponsiveContainer, 
     Cell,
-    Legend
+    Legend,
+    LabelList
 } from 'recharts';
 
 const InterconsultasDashboard: React.FC = () => {
@@ -195,6 +196,58 @@ const InterconsultasDashboard: React.FC = () => {
         doc.save(`Reporte_IC_${doctorName.replace(' ', '_')}_${reportMonth}.pdf`);
     };
 
+    const downloadChartPDF = (type: 'priority' | 'doctors') => {
+        const doc = new jsPDF({ orientation: 'portrait' });
+        const reportMonth = months[selectedMonth];
+
+        doc.setFontSize(18);
+        doc.setTextColor(63, 81, 181);
+
+        if (type === 'priority') {
+            doc.text('Distribución de Prioridades por Servicio', 14, 22);
+            doc.setFontSize(11);
+            doc.setTextColor(100);
+            doc.text(`Periodo: ${reportMonth} ${new Date().getFullYear()}`, 14, 30);
+            
+            const tableBody = priorityByService.map(item => [
+                item.name,
+                item.P1.toString(),
+                item.P2.toString(),
+                item.P3.toString(),
+                item.total.toString()
+            ]);
+
+            autoTable(doc, {
+                startY: 40,
+                head: [['Servicio', 'Prioridad 1', 'Prioridad 2', 'Prioridad 3', 'Total']],
+                body: tableBody,
+                theme: 'grid',
+                headStyles: { fillColor: [63, 81, 181] }
+            });
+            doc.save(`Grafico_Prioridades_${reportMonth}.pdf`);
+        } else {
+            doc.text('Respuestas por Médico Evaluador', 14, 22);
+            doc.setFontSize(11);
+            doc.setTextColor(100);
+            doc.text(`Periodo: ${reportMonth} ${new Date().getFullYear()}`, 14, 30);
+            
+            const tableBody = doctorResponses.map(item => [
+                item.name,
+                item.value.toString(),
+                `${item.percentage}%`
+            ]);
+
+            autoTable(doc, {
+                startY: 40,
+                head: [['Médico Evaluador', 'ICs Respondidas', 'Porcentaje']],
+                body: tableBody,
+                theme: 'grid',
+                headStyles: { fillColor: [63, 81, 181] }
+            });
+            doc.save(`Grafico_Medicos_${reportMonth}.pdf`);
+        }
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50 text-indigo-600 font-bold">
@@ -326,11 +379,18 @@ const InterconsultasDashboard: React.FC = () => {
                 <div className="flex flex-col lg:flex-row gap-8">
                     {/* Priority by Service */}
                     <div className="w-full lg:flex-1 bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm">
-                        <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-start justify-between mb-6">
                             <div>
                                 <h2 className="text-lg font-black text-slate-800">Prioridad por Servicio</h2>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Respondidas (P1, P2, P3)</p>
                             </div>
+                            <button 
+                                onClick={() => downloadChartPDF('priority')}
+                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase flex items-center gap-1.5 transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="size-3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                PDF
+                            </button>
                         </div>
                         <div className="h-[250px] w-full">
                             <ResponsiveContainer width="100%" height="100%">
@@ -352,9 +412,9 @@ const InterconsultasDashboard: React.FC = () => {
                                         contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
                                     />
                                     <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
-                                    <Bar dataKey="P1" stackId="a" fill="#ef4444" name="Prioridad 1" radius={[0, 0, 8, 8]} barSize={30} />
-                                    <Bar dataKey="P2" stackId="a" fill="#f59e0b" name="Prioridad 2" />
-                                    <Bar dataKey="P3" stackId="a" fill="#10b981" name="Prioridad 3" radius={[8, 8, 0, 0]} />
+                                    <Bar dataKey="P1" fill="#ef4444" name="Prioridad 1" radius={[4, 4, 0, 0]} barSize={15} />
+                                    <Bar dataKey="P2" fill="#f59e0b" name="Prioridad 2" radius={[4, 4, 0, 0]} barSize={15} />
+                                    <Bar dataKey="P3" fill="#10b981" name="Prioridad 3" radius={[4, 4, 0, 0]} barSize={15} />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -362,18 +422,25 @@ const InterconsultasDashboard: React.FC = () => {
 
                     {/* Doctor Responses */}
                     <div className="w-full lg:flex-1 bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm">
-                        <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-start justify-between mb-6">
                             <div>
                                 <h2 className="text-lg font-black text-slate-800">Respuestas por Médico</h2>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Interconsultas abordadas</p>
                             </div>
+                            <button 
+                                onClick={() => downloadChartPDF('doctors')}
+                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase flex items-center gap-1.5 transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="size-3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                PDF
+                            </button>
                         </div>
                         <div className="h-[250px] w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart
                                     layout="vertical"
                                     data={doctorResponses}
-                                    margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
+                                    margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
                                 >
                                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                                     <XAxis type="number" hide />
@@ -382,9 +449,9 @@ const InterconsultasDashboard: React.FC = () => {
                                         type="category" 
                                         axisLine={false} 
                                         tickLine={false} 
-                                        width={100}
-                                        tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }}
-                                        tickFormatter={(val) => val.split(' ')[0]} // Only show first name visually to save space
+                                        width={110}
+                                        tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}
+                                        tickFormatter={(val) => val.length > 20 ? val.substring(0, 20) + '...' : val} 
                                     />
                                     <Tooltip 
                                         cursor={{ fill: '#f8fafc' }}
@@ -392,6 +459,7 @@ const InterconsultasDashboard: React.FC = () => {
                                         formatter={(value: any, name: any, props: any) => [`${value} Respuestas (${props.payload.percentage}%)`, 'Cantidad']}
                                     />
                                     <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={20}>
+                                        <LabelList dataKey="value" position="right" style={{ fill: '#475569', fontSize: '11px', fontWeight: 'bold' }} />
                                         {doctorResponses.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}
