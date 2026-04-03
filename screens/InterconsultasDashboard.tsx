@@ -225,16 +225,20 @@ const InterconsultasDashboard: React.FC = () => {
                             <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.length}</h3>
                         </div>
                         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                            <p className="text-[10px] font-black text-amber-500 uppercase tracking-wider mb-1">Pendientes</p>
-                            <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.filter(i => i.status === 'pending').length}</h3>
+                            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-wider mb-1 leading-tight">Eval. y Pase</p>
+                            <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.filter(i => i.reason === 'evaluacion_pase').length}</h3>
                         </div>
                         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                            <p className="text-[10px] font-black text-green-500 uppercase tracking-wider mb-1">Admitidos</p>
-                            <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.filter(i => i.status === 'admitted').length}</h3>
+                            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1 leading-tight">Eval. y Sugerencias</p>
+                            <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.filter(i => i.reason === 'evaluacion_sugerencias').length}</h3>
                         </div>
                         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1">Completados</p>
-                            <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.filter(i => i.status === 'completed').length}</h3>
+                            <p className="text-[10px] font-black text-red-500 uppercase tracking-wider mb-1 leading-tight">PCR</p>
+                            <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.filter(i => i.reason === 'pcr').length}</h3>
+                        </div>
+                        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                            <p className="text-[10px] font-black text-orange-500 uppercase tracking-wider mb-1 leading-tight">UTSNA</p>
+                            <h3 className="text-3xl font-black text-slate-900">{filteredDataByMonth.filter(i => i.reason === 'ustna').length}</h3>
                         </div>
                     </div>
 
