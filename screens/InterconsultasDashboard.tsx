@@ -13,7 +13,8 @@ import {
     CartesianGrid, 
     Tooltip, 
     ResponsiveContainer, 
-    Cell 
+    Cell,
+    Legend
 } from 'recharts';
 
 const InterconsultasDashboard: React.FC = () => {
@@ -68,6 +69,43 @@ const InterconsultasDashboard: React.FC = () => {
             }))
             .sort((a, b) => b.value - a.value)
             .slice(0, 8); // Top 8 services
+    }, [filteredDataByMonth]);
+
+    const priorityByService = useMemo(() => {
+        const counts: { [key: string]: { name: string, P1: number, P2: number, P3: number, total: number } } = {};
+        filteredDataByMonth.forEach(ic => {
+            if (ic.status === 'pending') return; // respondidas
+            if (!['1', '2', '3'].includes(ic.priority || '')) return; // con prioridad 1, 2, 3
+            
+            const origin = ic.service_origin || 'Otro/No especificado';
+            if (!counts[origin]) counts[origin] = { name: origin, P1: 0, P2: 0, P3: 0, total: 0 };
+            counts[origin][`P${ic.priority}` as 'P1'|'P2'|'P3']++;
+            counts[origin].total++;
+        });
+
+        return Object.values(counts)
+            .sort((a, b) => b.total - a.total)
+            .slice(0, 8);
+    }, [filteredDataByMonth]);
+
+    const doctorResponses = useMemo(() => {
+        const counts: { [key: string]: number } = {};
+        let total = 0;
+        filteredDataByMonth.forEach(ic => {
+            if (ic.responders && ic.status !== 'pending') {
+                counts[ic.responders] = (counts[ic.responders] || 0) + 1;
+                total++;
+            }
+        });
+
+        return Object.entries(counts)
+            .map(([name, value]) => ({
+                name,
+                value,
+                percentage: total > 0 ? Number(((value / total) * 100).toFixed(1)) : 0
+            }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 8);
     }, [filteredDataByMonth]);
 
     const unsatisfiedDemand = useMemo(() => {
@@ -275,6 +313,86 @@ const InterconsultasDashboard: React.FC = () => {
                                     />
                                     <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={20}>
                                         {servicesDistribution.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+
+                {/* New Charts Row: Priority vs Service & Doctor Responses */}
+                <div className="flex flex-col lg:flex-row gap-8">
+                    {/* Priority by Service */}
+                    <div className="w-full lg:flex-1 bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm">
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h2 className="text-lg font-black text-slate-800">Prioridad por Servicio</h2>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Respondidas (P1, P2, P3)</p>
+                            </div>
+                        </div>
+                        <div className="h-[250px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                    data={priorityByService}
+                                    margin={{ top: 5, right: 10, left: 0, bottom: 20 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis 
+                                        dataKey="name" 
+                                        axisLine={false} 
+                                        tickLine={false} 
+                                        tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}
+                                        tickFormatter={(value) => value.substring(0, 10) + (value.length > 10 ? '...' : '')}
+                                    />
+                                    <YAxis hide />
+                                    <Tooltip 
+                                        cursor={{ fill: '#f8fafc' }}
+                                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
+                                    />
+                                    <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                                    <Bar dataKey="P1" stackId="a" fill="#ef4444" name="Prioridad 1" radius={[0, 0, 8, 8]} barSize={30} />
+                                    <Bar dataKey="P2" stackId="a" fill="#f59e0b" name="Prioridad 2" />
+                                    <Bar dataKey="P3" stackId="a" fill="#10b981" name="Prioridad 3" radius={[8, 8, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {/* Doctor Responses */}
+                    <div className="w-full lg:flex-1 bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm">
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h2 className="text-lg font-black text-slate-800">Respuestas por Médico</h2>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Interconsultas abordadas</p>
+                            </div>
+                        </div>
+                        <div className="h-[250px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                    layout="vertical"
+                                    data={doctorResponses}
+                                    margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                                    <XAxis type="number" hide />
+                                    <YAxis 
+                                        dataKey="name" 
+                                        type="category" 
+                                        axisLine={false} 
+                                        tickLine={false} 
+                                        width={100}
+                                        tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }}
+                                        tickFormatter={(val) => val.split(' ')[0]} // Only show first name visually to save space
+                                    />
+                                    <Tooltip 
+                                        cursor={{ fill: '#f8fafc' }}
+                                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
+                                        formatter={(value: any, name: any, props: any) => [`${value} Respuestas (${props.payload.percentage}%)`, 'Cantidad']}
+                                    />
+                                    <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={20}>
+                                        {doctorResponses.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}
                                     </Bar>
