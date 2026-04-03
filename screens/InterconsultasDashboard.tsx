@@ -175,20 +175,25 @@ const InterconsultasDashboard: React.FC = () => {
             ic.service_origin,
             ic.health_problem_1?.replace('(SUG) ', '') || ic.reason,
             ic.priority || '---',
-            ic.status === 'pending' ? 'Pendiente' : ic.status === 'admitted' ? 'Admitido' : 'Completado'
+            ic.responders || '---',
+            ic.status === 'pending' ? 'Pendiente' :
+            ic.status === 'admitted' ? 'Admitido' :
+            (ic.priority === '4A' || ic.priority === '4B') ? 'No Tributario' : 'Completado'
         ]);
 
         autoTable(doc, {
             startY: 58,
-            head: [['Fecha', 'Paciente', 'HC', 'Origen', 'Problema/Motivo', 'Prioridad', 'Estado']],
+            head: [['Fecha', 'Paciente', 'HC', 'Origen', 'Problema/Motivo', 'Prioridad', 'Médico Evaluador', 'Estado']],
             body: tableBody,
             theme: 'grid',
             headStyles: { fillColor: [63, 81, 181], textColor: [255, 255, 255], fontStyle: 'bold' },
-            styles: { fontSize: 9, cellPadding: 3 },
+            styles: { fontSize: 8, cellPadding: 3 },
             columnStyles: {
-                0: { cellWidth: 25 },
-                1: { cellWidth: 50 },
-                4: { cellWidth: 70 }
+                0: { cellWidth: 22 },
+                1: { cellWidth: 42 },
+                4: { cellWidth: 55 },
+                6: { cellWidth: 38 },
+                7: { cellWidth: 28 }
             }
         });
 
