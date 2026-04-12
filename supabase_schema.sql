@@ -55,7 +55,17 @@ create table public.patients (
   physical_exam jsonb default '{}'::jsonb,
   apache_score numeric,
   sofa_score numeric,
-  charlson_score numeric
+  charlson_score numeric,
+  -- Nuevos campos de filiación (v2)
+  sex text,
+  address text,
+  relative text,
+  relative_phone text,
+  ucin_transfer_date timestamptz,
+  icu_admission timestamptz,
+  marital_status text,
+  religion text,
+  occupation text
 );
 
 

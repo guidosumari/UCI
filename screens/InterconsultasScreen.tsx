@@ -1005,6 +1005,7 @@ const InterconsultasScreen: React.FC = () => {
                                         <option value="Ginecologia">Ginecología</option>
                                         <option value="Traumatologia">Traumatología</option>
                                         <option value="UCI">UCI</option>
+                                        <option value="Urologia">Urología</option>
                                         <option value="Cirugia de Cabeza y Cuello">Cirugía de Cabeza y Cuello</option>
                                     </select>
                                 </div>
