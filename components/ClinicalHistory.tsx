@@ -52,7 +52,7 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
         physical_exam: {
             vital_signs: { pa: '', pam: '', spo2: '', etco2: '', weight: '', height: '', fr: '', fc: '', fio2: '', temp: '', pid: '', imc: '' },
             neurologic: '',
-            glasgow: 15,
+            glasgow: '',
             respiratory: {
                 description: '', interface: '', fio2: '', pc: '', ppico: '', t_ins: '', vci: '', po2: '', pco2: '',
                 fr: '', peep: '', ie: '', cdin: '', vce: '', pafio2: '', gaa: ''
@@ -200,9 +200,10 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
         }
 
         // 11. Glasgow Coma Scale
-        const gcs = parseNum(aps.glasgow) || 15;
+        const gcsValue = parseNum(aps.glasgow);
+        const gcs = (gcsValue === null || gcsValue === undefined || gcsValue === '') ? 15 : gcsValue;
         score += (15 - Math.max(3, Math.min(15, gcs)));
-
+        
         // 12. Oxygenation (Simplified PaO2 pts for FiO2 < 50%)
         const po2 = parseNum(resp.po2);
         if (po2 !== null) {
@@ -268,7 +269,8 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
         else if (vp === 'map_under_70') score += 1;
 
         // 5. CNS (Glasgow)
-        const gcs = parseNum(aps.glasgow) || 15;
+        const gcsValue = parseNum(aps.glasgow);
+        const gcs = (gcsValue === null || gcsValue === undefined || gcsValue === '') ? 15 : gcsValue;
         if (gcs < 6) score += 4;
         else if (gcs <= 9) score += 3;
         else if (gcs <= 12) score += 2;
@@ -326,6 +328,26 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
         return score;
     };
 
+    const calculateKatz = (data: any) => {
+        const katz = data.katz || {};
+        const activities = ['bathing', 'dressing', 'toileting', 'transferring', 'continence', 'feeding'];
+        let score = 0;
+        activities.forEach(key => {
+            if (katz[key] === 'independent') score += 1;
+        });
+
+        // Katz Classification (A-G)
+        let group = 'G';
+        if (score === 6) group = 'A';
+        else if (score === 5) group = 'B';
+        else if (score === 4) group = 'C';
+        else if (score === 3) group = 'D';
+        else if (score === 2) group = 'E';
+        else if (score === 1) group = 'F';
+        else group = 'G';
+
+        return { score, group };
+    };
 
 
     useEffect(() => {
@@ -557,21 +579,20 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
         const boxStyles = { lineColor: [0, 0, 0], lineWidth: 1, fillColor: [255, 255, 255] };
         
         doc.rect(40, yPos, 160, 40); 
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
+        doc.setFontSize(12);
         doc.text('Servicio:', 45, yPos + 12);
-        doc.text('UCIN', 95, yPos + 12);
-        doc.line(40, yPos + 20, 200, yPos + 20);
-        doc.text('HCL:', 45, yPos + 32);
-        doc.text(patientData.hc || '----', 95, yPos + 32);
+        doc.text('UCIN', 105, yPos + 12);
+        doc.line(40, yPos + 22, 200, yPos + 22);
+        doc.text('HCL:', 45, yPos + 35);
+        doc.text(patientData.hc || '----', 105, yPos + 35);
 
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(14);
-        doc.text('HISTORIA CLÍNICA UCIN – ADULTOS', 250, yPos + 25);
-        doc.setLineWidth(1);
-        doc.line(250, yPos + 27, 490, yPos + 27);
+        doc.setFontSize(16);
+        doc.text('HISTORIA CLÍNICA UCIN – ADULTOS', 230, yPos + 25);
+        doc.setLineWidth(1.5);
+        doc.line(230, yPos + 28, 520, yPos + 28);
 
-        yPos += 60;
+        yPos += 70;
 
         const safe = (val: any) => val ? String(val).toUpperCase() : '------';
 
@@ -582,35 +603,45 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 startY: yPos,
                 theme: 'grid',
                 styles: {
-                    fontSize: 8,
+                    fontSize: 10,
                     textColor: [0, 0, 0],
                     lineColor: [0, 0, 0],
                     lineWidth: 0.5,
-                    cellPadding: 3,
+                    cellPadding: 4,
                     font: 'helvetica',
                 },
                 headStyles: {
-                    fillColor: [255, 255, 255],
+                    fillColor: [240, 240, 240],
                     textColor: [0, 0, 0],
                     fontStyle: 'bold',
                     halign: 'center',
+                    fontSize: 11
                 },
                 ...options
             });
-            yPos = (doc as any).lastAutoTable.finalY + 10;
+            yPos = (doc as any).lastAutoTable.finalY + 15;
         };
 
         createTable(
             [[{ content: 'DATOS DE FILIACIÓN', colSpan: 4 }]],
             [
-                ['Nombre:', { content: safe(patientData.name), colSpan: 3 }],
-                ['Edad: ' + safe(patientData.age), { content: 'Sexo: ' + safe(patientData.sex), colSpan: 2 }, 'DNI: ' + safe(patientData.dni)],
-                ['Estado civil: ' + safe(patientData.marital_status), { content: 'Religión: ' + safe(patientData.religion), colSpan: 2 }, 'Ocupación: ' + safe(patientData.occupation)],
-                [{ content: 'Fecha de Ingreso al Hosp.: ' + safe(patientData.hospital_admission), colSpan: 4 }],
-                [{ content: 'Fecha de ingreso a UCIN: ' + safe(patientData.icu_admission).replace('T', ' '), colSpan: 4 }],
-                [{ content: 'Dirección: ' + safe(patientData.address), colSpan: 4 }],
-                [{ content: 'Persona Responsable: ' + safe(patientData.relative), colSpan: 2 }, { content: 'CEL: ' + safe(patientData.relative_phone), colSpan: 2 }]
-            ]
+                [{ content: 'APELLIDOS Y NOMBRES:', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, { content: safe(patientData.name), colSpan: 3 }],
+                [{ content: 'HISTORIA CLÍNICA:', styles: { fontStyle: 'bold' } }, safe(patientData.hc), { content: 'DNI / CE:', styles: { fontStyle: 'bold' } }, safe(patientData.dni)],
+                [{ content: 'EDAD:', styles: { fontStyle: 'bold' } }, safe(patientData.age), { content: 'SEXO:', styles: { fontStyle: 'bold' } }, safe(patientData.sex)],
+                [{ content: 'ESTADO CIVIL:', styles: { fontStyle: 'bold' } }, safe(patientData.marital_status), { content: 'OCUPACIÓN:', styles: { fontStyle: 'bold' } }, safe(patientData.occupation)],
+                [{ content: 'RELIGIÓN:', styles: { fontStyle: 'bold' } }, { content: safe(patientData.religion), colSpan: 3 }],
+                [{ content: 'ADMISION HOSP.:', styles: { fontStyle: 'bold' } }, safe(patientData.hospital_admission), { content: 'ADMISION UCI:', styles: { fontStyle: 'bold' } }, safe(patientData.icu_admission).replace('T', ' ')],
+                [{ content: 'DIRECCIÓN:', styles: { fontStyle: 'bold' } }, { content: safe(patientData.address), colSpan: 3 }],
+                [{ content: 'RESPONSABLE:', styles: { fontStyle: 'bold' } }, safe(patientData.relative), { content: 'TELÉFONO:', styles: { fontStyle: 'bold' } }, safe(patientData.relative_phone)]
+            ],
+            {
+                columnStyles: {
+                    0: { cellWidth: 110 },
+                    1: { cellWidth: 'auto' },
+                    2: { cellWidth: 100 },
+                    3: { cellWidth: 'auto' }
+                }
+            }
         );
 
         const getAntecedentesString = () => {
@@ -626,6 +657,9 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
             return acts.length > 0 ? acts.join(', ') : 'NIEGA';
         };
 
+        const charlsonScore = calculateCharlson(patientData);
+        const katz = calculateKatz(patientData);
+
         createTable(
             [[{ content: 'ANTECEDENTES', colSpan: 6 }]],
             [
@@ -633,9 +667,8 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 ['Hábitos Nocivos:', 'Tabaco:', 'NIEGA', 'Alcohol:', 'NIEGA', 'Drogas: NIEGA'],
                 ['RAMs/Alergias:', { content: patientData.allergies ? patientData.allergies.toUpperCase() : 'NIEGA', colSpan: 5 }],
                 ['Cirugías previas:', { content: safe(patientData.hx_surgical), colSpan: 5 }],
-                ['Transfusiones:', { content: 'NIEGA', colSpan: 5 }],
                 ['Medicación Habitual:', { content: safe(patientData.hx_medication), colSpan: 5 }],
-                ['Familiares:', { content: 'NIEGA', colSpan: 5 }]
+                [{ content: `ÍNDICE DE CHARLSON: ${charlsonScore} PUNTOS`, colSpan: 3, styles: { fontStyle: 'bold' } }, { content: `VALORACIÓN FUNCIONAL (KATZ): ${katz.score}/6 (GRUPO ${katz.group})`, colSpan: 3, styles: { fontStyle: 'bold' } }]
             ]
         );
 
@@ -656,7 +689,7 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
             [
                 ['Peso', getV('vital_signs', 'weight'), 'PA:', getV('vital_signs', 'pa'), 'FC:', getV('vital_signs', 'fc'), 'SatO2', getV('vital_signs', 'spo2')],
                 ['Talla', getV('vital_signs', 'height'), 'T°:', getV('vital_signs', 'temp'), 'FR:', getV('vital_signs', 'fr'), 'FiO2', getV('vital_signs', 'fio2')],
-                ['General', { content: getV('neurologic', 'glasgow') || 'REG, REN, REH', colSpan: 7 }],
+                ['General', { content: (pe.glasgow ? `GLASGOW (GCS): ${pe.glasgow}` : 'REG, REN, REH'), colSpan: 7 }],
                 ['Piel', { content: 'TIBIA, ELÁSTICA, LLENADO CAPILAR < 2"', colSpan: 7 }],
                 ['Neurológico:', { content: safe(pe.neurologic), colSpan: 7 }],
                 ['Respiratorio:', { content: 'MV PASA EN AHT. ' + safe(pe.respiratory?.description) + '. SOP. VENT: ' + getV('respiratory', 'interface'), colSpan: 7 }],
@@ -677,8 +710,7 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 [
                     'Hematológico:', 
                     { content: `Hb ${getV('hematology', 'hb')}   Hto: ${getV('hematology', 'hto')}`, colSpan: 3 },
-                    { content: `Plaquetas: ${getV('hematology', 'plaq')}`, colSpan: 2 },
-                    { content: `Score APACHE II: ${calculateApacheII(patientData)}`, colSpan: 2, styles: { fontStyle: 'bold', textColor: [79, 70, 229] } }
+                    { content: `Plaquetas: ${getV('hematology', 'plaq')}`, colSpan: 4 }
                 ],
 
                 [
@@ -698,6 +730,17 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
             [[{ content: 'PLAN', colSpan: 1 }]],
             [
                 [{ content: safe(patientData.plan).replace(/\n/g, '\n'), styles: { minCellHeight: 120, cellPadding: 5 } }]
+            ]
+        );
+
+        const apache = calculateApacheII(patientData);
+        const sofa = calculateSOFA(patientData);
+
+        createTable(
+            [[{ content: 'VALORACIÓN PRONÓSTICA AL INGRESO', colSpan: 2 }]],
+            [
+                [{ content: `APACHE II Score: ${apache}`, styles: { fontStyle: 'bold', fontSize: 12 } }, { content: `SOFA Score: ${sofa}`, styles: { fontStyle: 'bold', fontSize: 12 } }],
+                [{ content: `Mortalidad Estimada (APACHE II): ${apache > 25 ? '> 50%' : apache > 15 ? '25-50%' : '< 25%'}`, colSpan: 2, styles: { halign: 'center', cellPadding: 8 } }]
             ]
         );
 
@@ -1159,8 +1202,8 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                                 type="number" 
                                 min="3" 
                                 max="15" 
-                                value={patientData.physical_exam?.glasgow || 15}
-                                onChange={(e) => handlePhyChange('neurologic', 'glasgow', e.target.value)}
+                                value={patientData.physical_exam?.glasgow ?? ''}
+                                onChange={(e) => handlePhyChange('', 'glasgow', e.target.value)}
                                 className="w-12 border border-slate-200 rounded px-1 py-0.5 text-xs font-bold text-center"
                             />
                         </div>
