@@ -260,7 +260,7 @@ const InterconsultasScreen: React.FC = () => {
         const filteredData = interconsultations
             .filter(ic => {
                 const icDate = new Date(ic.created_at || '');
-                return icDate >= fiveDaysAgo && ic.status === 'pending' && (ic.priority !== null && ic.priority !== undefined && ic.priority !== '');
+                return icDate >= fiveDaysAgo && ic.status === 'pending' && (ic.priority !== null && ic.priority !== undefined && ic.priority !== '' && ic.priority !== '4A' && ic.priority !== '4B');
             })
             .sort((a, b) => {
                 // Secondary sort: Priority (1, 2, 3)
@@ -426,7 +426,7 @@ const InterconsultasScreen: React.FC = () => {
                 const currentReason = field === 'reason' ? value : newState.reason;
                 const currentPriority = field === 'priority' ? value : newState.priority;
                 
-                if (currentReason === 'evaluacion_pase' && (currentPriority === '4A' || currentPriority === '4B')) {
+                if ((currentPriority === '4A' || currentPriority === '4B')) {
                     newState.status = 'completed';
                 } else if (field === 'priority' && value !== '4A' && value !== '4B' && prev.status === 'completed') {
                     newState.status = 'pending';
@@ -567,7 +567,7 @@ const InterconsultasScreen: React.FC = () => {
                                     groupedInterconsultations
                                         .filter(group => {
                                             const ic = group.latest;
-                                            const hasPriority = ic.priority !== null && ic.priority !== undefined && ic.priority !== '';
+                                            const hasPriority = ic.priority !== null && ic.priority !== undefined && ic.priority !== '' && ic.priority !== '4A' && ic.priority !== '4B';
                                             if (viewMode === 'waiting') return ic.status === 'pending' && hasPriority;
                                             if (viewMode === 'pcr') return ic.reason === 'pcr';
                                             return true;
@@ -580,7 +580,7 @@ const InterconsultasScreen: React.FC = () => {
                                         groupedInterconsultations
                                             .filter(group => {
                                                 const ic = group.latest;
-                                                const hasPriority = ic.priority !== null && ic.priority !== undefined && ic.priority !== '';
+                                                const hasPriority = ic.priority !== null && ic.priority !== undefined && ic.priority !== '' && ic.priority !== '4A' && ic.priority !== '4B';
                                                 if (viewMode === 'waiting') return ic.status === 'pending' && hasPriority;
                                                 if (viewMode === 'pcr') return ic.reason === 'pcr';
                                                 return true;
@@ -759,7 +759,7 @@ const InterconsultasScreen: React.FC = () => {
                     {loading ? (
                         <div className="text-center p-8 text-slate-500 font-bold animate-pulse">Cargando lista de espera...</div>
                                     ) : interconsultations.filter(ic => {
-                        if (viewMode === 'waiting') return ic.status === 'pending';
+                        if (viewMode === 'waiting') return ic.status === 'pending' && ic.priority !== '4A' && ic.priority !== '4B';
                         if (viewMode === 'pcr') return ic.reason === 'pcr';
                         return true;
                     }).length === 0 ? (
@@ -776,7 +776,7 @@ const InterconsultasScreen: React.FC = () => {
                     ) : (
                         interconsultations
                                 .filter(ic => {
-                                    const hasPriority = ic.priority !== null && ic.priority !== undefined && ic.priority !== '';
+                                    const hasPriority = ic.priority !== null && ic.priority !== undefined && ic.priority !== '' && ic.priority !== '4A' && ic.priority !== '4B';
                                     if (viewMode === 'waiting') return ic.status === 'pending' && hasPriority;
                                     if (viewMode === 'pcr') return ic.reason === 'pcr';
                                     return true;
