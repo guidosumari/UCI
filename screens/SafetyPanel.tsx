@@ -25,6 +25,7 @@ const SafetyPanel: React.FC = () => {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState<'monitoring' | 'history' | 'evolution'>(initialTab || 'monitoring');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     const fetchPatient = async () => {
@@ -112,16 +113,16 @@ const SafetyPanel: React.FC = () => {
               </div>
             </section>
 
-            <section className="bg-white rounded-lg border border-[#cfd7e7] shadow-sm overflow-hidden p-6 max-w-2xl">
+            <section className="bg-white rounded-lg border border-[#cfd7e7] shadow-sm overflow-hidden p-4 md:p-6 max-w-2xl">
               <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
                 <span className="material-symbols-outlined text-orange-500">lock_clock</span> Contenciones y Órdenes
               </h3>
-              <div className="flex gap-6 items-center">
-                <div className="text-4xl font-mono text-orange-600 bg-orange-50 px-4 py-2 rounded border border-orange-100">02:15</div>
+              <div className="flex flex-col sm:flex-row gap-4 md:gap-6 items-start sm:items-center">
+                <div className="text-3xl md:text-4xl font-mono text-orange-600 bg-orange-50 px-4 py-2 rounded border border-orange-100 self-center sm:self-auto">02:15</div>
                 <div className="flex-1">
-                  <h4 className="font-bold">Contenciones de 4 Puntos</h4>
+                  <h4 className="font-bold text-slate-900">Contenciones de 4 Puntos</h4>
                   <p className="text-sm text-slate-500">Renovación médica requerida antes de las 16:30.</p>
-                  <button className="mt-3 bg-primary text-white text-xs px-4 py-2 rounded font-bold shadow-sm">Renovar Orden</button>
+                  <button className="mt-3 w-full sm:w-auto bg-primary text-white text-xs px-4 py-2 rounded font-bold shadow-sm">Renovar Orden</button>
                 </div>
               </div>
             </section>
@@ -131,22 +132,56 @@ const SafetyPanel: React.FC = () => {
   };
 
   return (
-    <div className="bg-background-light text-slate-900 h-screen overflow-hidden flex font-display antialiased">
-      <aside className="w-64 bg-white border-r border-[#cfd7e7] flex flex-col h-full shrink-0 z-30">
-        <div className="p-4 border-b border-[#cfd7e7]">
+    <div className="bg-background-light text-slate-900 h-screen overflow-hidden flex flex-col md:flex-row font-display antialiased">
+      {/* Mobile Header Toggle */}
+      <div className="md:hidden bg-white border-b border-[#cfd7e7] p-3 flex items-center justify-between z-40">
+        <button 
+          onClick={() => setIsSidebarOpen(true)}
+          className="p-2 hover:bg-slate-100 rounded-lg text-slate-600"
+        >
+          <span className="material-symbols-outlined">menu</span>
+        </button>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold">Gestor de UCI</span>
+        </div>
+        <div className="w-10"></div> {/* Spacer */}
+      </div>
+
+      {/* Sidebar / Drawer */}
+      <aside className={`
+        fixed inset-0 z-50 transform transition-transform duration-300 md:relative md:translate-x-0 md:z-30
+        w-64 bg-white border-r border-[#cfd7e7] flex flex-col h-full shrink-0
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        {/* Overlay for mobile */}
+        {isSidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] md:hidden"
+            onClick={() => setIsSidebarOpen(false)}
+            style={{ left: '100%', width: '100vw' }}
+          ></div>
+        )}
+
+        <div className="p-4 border-b border-[#cfd7e7] flex items-center justify-between">
           <div className="flex gap-3 items-center">
             <img src="https://picsum.photos/id/177/200/200" className="rounded-full h-10 w-10 shrink-0 border border-gray-200" alt="Admin" />
             <div className="flex flex-col">
-              <h1 className="text-base font-bold leading-normal">Gestor de UCI</h1>
+              <h1 className="text-base font-bold leading-normal text-slate-900">Gestor de UCI</h1>
               <p className="text-[#4c669a] text-xs font-normal">Turno de Día</p>
             </div>
           </div>
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="md:hidden p-2 hover:bg-slate-100 rounded-lg text-slate-400"
+          >
+            <span className="material-symbols-outlined">close</span>
+          </button>
         </div>
         <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
           <p className="px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 mt-2">Menú Principal</p>
 
           <button
-            onClick={() => setActiveTab('monitoring')}
+            onClick={() => { setActiveTab('monitoring'); setIsSidebarOpen(false); }}
             className={`flex items-center gap-4 px-4 py-3.5 rounded-xl w-full text-left transition-all duration-200 group ${activeTab === 'monitoring'
               ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
               : 'text-slate-600 hover:bg-slate-100'
@@ -156,7 +191,7 @@ const SafetyPanel: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('history')}
+            onClick={() => { setActiveTab('history'); setIsSidebarOpen(false); }}
             className={`flex items-center gap-4 px-4 py-3.5 rounded-xl w-full text-left transition-all duration-200 group ${activeTab === 'history'
               ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
               : 'text-slate-600 hover:bg-slate-100'
@@ -166,7 +201,7 @@ const SafetyPanel: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('evolution')}
+            onClick={() => { setActiveTab('evolution'); setIsSidebarOpen(false); }}
             className={`flex items-center gap-4 px-4 py-3.5 rounded-xl w-full text-left transition-all duration-200 group ${activeTab === 'evolution'
               ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
               : 'text-slate-600 hover:bg-slate-100'
@@ -194,40 +229,43 @@ const SafetyPanel: React.FC = () => {
       </aside>
 
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
-        <header className="bg-white border-b border-[#cfd7e7] p-4 md:px-8 md:py-5 shadow-sm z-10">
-          <div className="flex justify-between items-center">
-            <div className="flex gap-4 items-center">
-              <div className="bg-blue-600 rounded-full h-16 w-16 flex items-center justify-center text-white font-bold text-xl shadow-inner border-2 border-white">
+        <header className="bg-white border-b border-[#cfd7e7] p-4 md:px-8 md:py-5 shadow-sm z-10 transition-all">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5 md:gap-4">
+            <div className="flex gap-5 md:gap-4 items-center w-full sm:w-auto">
+              <div className="bg-blue-600 rounded-full h-12 w-12 md:h-16 md:w-16 flex items-center justify-center text-white font-bold text-lg md:text-xl shadow-inner border-2 border-white shrink-0">
                 {patient.name.charAt(0)}
               </div>
-              <div>
-                <h2 className="text-2xl font-bold flex items-center gap-3">
-                  {patient.name}
-                  <span className="text-xs font-semibold text-[#4c669a] bg-[#f0f2f5] px-2 py-0.5 rounded border border-[#cfd7e7]">HC: {patient.hc}</span>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg md:text-2xl font-bold flex flex-wrap items-center gap-2 md:gap-3 leading-tight text-slate-900">
+                  <span className="truncate">{patient.name}</span>
+                  <span className="text-[10px] md:text-xs font-bold text-[#4c669a] bg-[#f0f2f5] px-2 py-0.5 rounded border border-[#cfd7e7] whitespace-nowrap">HC: {patient.hc}</span>
                 </h2>
-                <div className="flex gap-x-3 mt-1 text-sm text-[#4c669a]">
-                  <span><strong>Fecha Nac:</strong> {patient.dob}</span>
+                <div className="flex flex-wrap gap-x-4 mt-1 text-[11px] md:text-sm text-[#4c669a] font-medium">
+                  <span><strong>Nac:</strong> {patient.dob}</span>
                   <span><strong>Peso:</strong> {patient.weight}kg</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] text-[#4c669a] font-bold uppercase">Estado de Gravedad</span>
-                <span className={`font-bold text-sm ${patient.acuity === 'ALTA' ? 'text-red-600' : 'text-emerald-600'}`}>
-                  {patient.acuity}
-                </span>
+            <div className="flex items-center justify-between w-full sm:w-auto gap-4 pt-2 sm:pt-0 border-t border-slate-50 sm:border-none">
+              <div className="flex items-center gap-2 bg-blue-50/50 px-3.5 py-2 rounded-xl border border-blue-100/50">
+                <div className="flex flex-col items-end">
+                  <span className="text-[8px] md:text-[10px] text-[#4c669a] font-black uppercase leading-none mb-1 tracking-wider">Gravedad</span>
+                  <span className={`font-black text-xs md:text-sm ${patient.acuity === 'ALTA' ? 'text-red-600' : 'text-emerald-600'}`}>
+                    {patient.acuity}
+                  </span>
+                </div>
               </div>
-            </div>
 
-            <button
-              onClick={() => setShowDischargeModal(true)}
-              className="ml-4 bg-white border border-slate-200 text-slate-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-sm">logout</span>
-              Egreso / Alta
-            </button>
+              <button
+                onClick={() => setShowDischargeModal(true)}
+                className="bg-white border border-slate-200 text-slate-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 px-4 py-2.5 rounded-xl text-[10px] md:text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shadow-sm active:scale-95"
+              >
+                <span className="material-symbols-outlined text-sm">logout</span>
+                <span className="hidden xs:inline">Egreso / Alta</span>
+                <span className="xs:hidden">Egreso</span>
+              </button>
+            </div>
           </div>
         </header>
 

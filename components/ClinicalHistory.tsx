@@ -1599,80 +1599,81 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
 
     return (
         <div className="flex flex-col h-full bg-white">
-            <div className="border-b border-slate-200 px-6 py-4 flex items-center justify-between bg-white sticky top-0 z-10">
-                <div>
-                    <h2 className="text-xl font-bold text-slate-800">Historia Clínica de Admisión</h2>
-                    <p className="text-xs text-slate-500">Datos de Ingreso a UCI</p>
+            <div className="border-b border-slate-200 px-4 md:px-6 py-3 md:py-4 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 bg-white sticky top-0 z-10 transition-all">
+                <div className="flex-1 min-w-0">
+                    <h2 className="text-base md:text-xl font-bold text-slate-800 truncate">Historia Clínica de Admisión</h2>
+                    <p className="text-[9px] md:text-xs text-slate-500 font-medium tracking-tight">Datos de Ingreso a UCI</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 md:gap-3 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
                     <button
                         onClick={generateClinicalHistoryPDF}
-                        className="bg-indigo-600 text-white px-5 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition-all shadow-md flex items-center gap-2"
+                        className="whitespace-nowrap bg-indigo-600 text-white px-2.5 md:px-5 py-1.5 md:py-2 rounded-lg font-bold text-[10px] md:text-sm hover:bg-indigo-700 transition-all shadow-md flex items-center gap-1.5 md:gap-2 shrink-0"
                     >
-                        <span className="material-symbols-outlined text-lg">download</span>
-                        Descargar PDF
+                        <span className="material-symbols-outlined text-[16px] md:text-[18px]">download</span>
+                        <span className="hidden xs:inline">Descargar PDF</span>
+                        <span className="xs:hidden">PDF</span>
                     </button>
                     <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="bg-primary text-white px-5 py-2 rounded-lg font-bold text-sm hover:bg-blue-600 transition-all shadow-md disabled:opacity-70 flex items-center gap-2"
+                        className="whitespace-nowrap bg-primary text-white px-2.5 md:px-5 py-1.5 md:py-2 rounded-lg font-bold text-[10px] md:text-sm hover:bg-blue-600 transition-all shadow-md disabled:opacity-70 flex items-center gap-1.5 md:gap-2 shrink-0"
                     >
-                        <span className="material-symbols-outlined text-lg">save</span>
-                        {saving ? 'Guardando...' : 'Guardar Cambios'}
+                        <span className="material-symbols-outlined text-[16px] md:text-[18px]">save</span>
+                        {saving ? '...' : 'Guardar'}
                     </button>
                     {patientId === 'new' && (
                         <button
                             onClick={() => window.location.hash = '/'}
-                            className="bg-slate-100 text-slate-600 px-4 py-2 rounded-lg font-bold text-sm hover:bg-slate-200 transition-all flex items-center gap-2"
+                            className="whitespace-nowrap bg-slate-100 text-slate-600 px-2 md:px-4 py-1.5 md:py-2 rounded-lg font-bold text-[10px] md:text-sm hover:bg-slate-200 transition-all flex items-center gap-1.5 md:gap-2 shrink-0"
                         >
-                            <span className="material-symbols-outlined text-lg">dashboard</span>
-                            Volver al Dashboard
+                            <span className="material-symbols-outlined text-[16px] md:text-[18px]">dashboard</span>
+                            <span className="hidden sm:inline">Menú</span>
                         </button>
                     )}
                 </div>
             </div>
 
-            <div className="flex border-b border-slate-200 bg-slate-50 px-6">
+            <div className="flex border-b border-slate-200 bg-slate-50 px-1 md:px-6 overflow-x-auto scrollbar-hide">
                 <button
                     onClick={() => setActiveSection('filiacion')}
-                    className={`px-4 py-3 text-sm font-bold border-b-2 transition-all ${activeSection === 'filiacion' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    className={`px-3 md:px-4 py-2.5 md:py-3 text-[11px] md:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 ${activeSection === 'filiacion' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                 >
                     1. Filiación
                 </button>
                 <button
                     onClick={() => setActiveSection('antecedentes')}
-                    className={`px-4 py-3 text-sm font-bold border-b-2 transition-all ${activeSection === 'antecedentes' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    className={`px-3 md:px-4 py-2.5 md:py-3 text-[11px] md:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 ${activeSection === 'antecedentes' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                 >
                     2. Antecedentes
                 </button>
                 <button
                     onClick={() => setActiveSection('anamnesis')}
-                    className={`px-4 py-3 text-sm font-bold border-b-2 transition-all ${activeSection === 'anamnesis' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    className={`px-3 md:px-4 py-2.5 md:py-3 text-[11px] md:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 ${activeSection === 'anamnesis' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                 >
                     3. Anamnesis
                 </button>
                 <button
                     onClick={() => setActiveSection('examen_fisico')}
-                    className={`px-4 py-3 text-sm font-bold border-b-2 transition-all ${activeSection === 'examen_fisico' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    className={`px-3 md:px-4 py-2.5 md:py-3 text-[11px] md:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 ${activeSection === 'examen_fisico' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                 >
                     4. Examen Físico
                 </button>
                 <button
                     onClick={() => setActiveSection('problemas')}
-                    className={`px-4 py-3 text-sm font-bold border-b-2 transition-all ${activeSection === 'problemas' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    className={`px-3 md:px-4 py-2.5 md:py-3 text-[11px] md:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 ${activeSection === 'problemas' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                 >
                     5. Probl. Salud
                 </button>
                 <button
                     onClick={() => setActiveSection('plan')}
-                    className={`px-4 py-3 text-sm font-bold border-b-2 transition-all ${activeSection === 'plan' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    className={`px-3 md:px-4 py-2.5 md:py-3 text-[11px] md:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 ${activeSection === 'plan' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                 >
                     6. Plan
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-8 pb-32 bg-[#f8f9fc]">
-                <div className="max-w-4xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-200 mb-10">
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32 bg-[#f8f9fc]">
+                <div className="max-w-4xl mx-auto bg-white p-5 md:p-8 rounded-xl md:rounded-2xl shadow-sm border border-slate-200 mb-10 transition-all">
                     {activeSection === 'filiacion' && renderFiliacion()}
                     {activeSection === 'antecedentes' && renderAntecedentes()}
                     {activeSection === 'anamnesis' && renderAnamnesis()}
