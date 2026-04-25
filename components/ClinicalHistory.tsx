@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -38,6 +38,7 @@ interface Props {
 
 const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [activeSection, setActiveSection] = useState<'filiacion' | 'antecedentes' | 'anamnesis' | 'examen_fisico' | 'problemas' | 'plan'>('filiacion');
     const [patientData, setPatientData] = useState<any>({
         // Filiación
@@ -353,9 +354,10 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
     useEffect(() => {
         if (patientId === 'new') {
             setLoading(false);
+            const initialBed = (location.state as any)?.bed || '';
             setPatientData((prev: any) => ({
                 ...prev,
-                // Default values for new patient if needed
+                bed: initialBed,
                 hospital_admission: new Date().toISOString().split('T')[0]
             }));
         } else {
@@ -500,6 +502,25 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 charlson_score: calculateCharlson(patientData)
             };
 
+            // BED OCCUPANCY VALIDATION
+            try {
+                const { data: existingPatient, error: checkError } = await supabase
+                    .from('patients')
+                    .select('id, name')
+                    .eq('bed', newPatient.bed)
+                    .eq('status', 'active')
+                    .maybeSingle();
+
+                if (checkError) throw checkError;
+                if (existingPatient) {
+                    alert(`ERROR: La cama ${newPatient.bed} ya está ocupada por el paciente ${existingPatient.name}. \n\nDebe dar de alta, fallecido o trasladado al paciente actual antes de asignar esta cama a uno nuevo.`);
+                    setSaving(false);
+                    return;
+                }
+            } catch (err: any) {
+                console.error("Error checking bed occupancy:", err);
+            }
+
 
 
             // Warning: The ClinicalHistory form DOES NOT have Bed or HC inputs currently.
@@ -531,6 +552,26 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
             
             const apacheScore = calculateApacheII(patientData);
             
+            // BED OCCUPANCY VALIDATION FOR UPDATES
+            try {
+                const { data: existingPatient, error: checkError } = await supabase
+                    .from('patients')
+                    .select('id, name')
+                    .eq('bed', patientData.bed)
+                    .eq('status', 'active')
+                    .neq('id', patientId) // Exclude current patient
+                    .maybeSingle();
+
+                if (checkError) throw checkError;
+                if (existingPatient) {
+                    alert(`ERROR: La cama ${patientData.bed} ya está ocupada por el paciente ${existingPatient.name}. \n\nDebe dar de alta, fallecido o trasladado al paciente actual antes de mover a este paciente a esa cama.`);
+                    setSaving(false);
+                    return;
+                }
+            } catch (err: any) {
+                console.error("Error checking bed occupancy:", err);
+            }
+            
             // Update existing
             try {
                 const { error } = await supabase.from('patients').update({
@@ -560,8 +601,6 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                     sofa_score: calculateSOFA(patientData),
                     charlson_score: calculateCharlson(patientData)
                 }).eq('id', patientId);
-
-
 
                 if (error) throw error;
                 alert('Datos de Historia Clínica Guardados.');

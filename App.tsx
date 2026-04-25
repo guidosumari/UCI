@@ -8,6 +8,7 @@ import NewAdmission from './screens/NewAdmission';
 import LoginScreen from './screens/LoginScreen';
 import InterconsultasScreen from './screens/InterconsultasScreen';
 import InterconsultasDashboard from './screens/InterconsultasDashboard';
+import UCIAnalysis from './screens/UCIAnalysis';
 import AntibioticsScreen from './screens/AntibioticsScreen';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -52,6 +53,11 @@ const AppRoutes: React.FC = () => {
       <Route path="/interconsultas/dashboard" element={
         <PrivateRoute>
           <InterconsultasDashboard />
+        </PrivateRoute>
+      } />
+      <Route path="/uci-analysis" element={
+        <PrivateRoute>
+          <UCIAnalysis />
         </PrivateRoute>
       } />
       <Route path="/antibiotics" element={

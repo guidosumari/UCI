@@ -32,10 +32,10 @@ const InterconsultasDashboard: React.FC = () => {
     const COLORS = ['#4f46e5', '#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe', '#e0e7ff'];
 
     useEffect(() => {
-        fetchInterconsultations();
+        fetchData();
     }, []);
 
-    const fetchInterconsultations = async () => {
+    const fetchData = async () => {
         setLoading(true);
         const { data, error } = await supabase
             .from('interconsultations')
@@ -44,6 +44,7 @@ const InterconsultasDashboard: React.FC = () => {
 
         if (error) console.error('Error fetching ICs:', error);
         else setInterconsultations(data || []);
+
         setLoading(false);
     };
 
@@ -124,6 +125,7 @@ const InterconsultasDashboard: React.FC = () => {
         if (totalCritical === 0) return 0;
         return Number(((pendingCritical / totalCritical) * 100).toFixed(1));
     }, [filteredDataByMonth]);
+
 
     const statsByDoctor = useMemo(() => {
         const stats: { [key: string]: { total: number, eval_pase: number, eval_sug: number, pcr: number, utsna: number } } = {};

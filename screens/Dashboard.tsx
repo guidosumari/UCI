@@ -185,13 +185,20 @@ const Dashboard: React.FC = () => {
               onClick={() => navigate('/interconsultas')}
               className="flex justify-center items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-indigo-700 transition shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-0.5 whitespace-nowrap"
             >
-              <span className="material-symbols-outlined text-lg"></span>
               Interconsultas
               {waitingList.length > 0 && (
                 <span className="bg-white text-indigo-600 text-[10px] h-5 min-w-[20px] px-1 flex items-center justify-center rounded-full font-black">
                   {waitingList.length}
                 </span>
               )}
+            </button>
+
+            <button
+              onClick={() => navigate('/uci-analysis')}
+              className="flex justify-center items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-emerald-700 transition shadow-lg hover:shadow-emerald-500/30 hover:-translate-y-0.5 whitespace-nowrap"
+            >
+              <span className="material-symbols-outlined text-lg font-bold">analytics</span>
+              Análisis UCI
             </button>
           </div>
 
@@ -216,9 +223,9 @@ const Dashboard: React.FC = () => {
               <div>
                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Ocupación Total</p>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-black text-slate-900 tracking-tight">{activePatients.length}/18</span>
+                  <span className="text-4xl font-black text-slate-900 tracking-tight">{activePatients.length}/12</span>
                   <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                    {Math.round((activePatients.length / 18) * 100)}%
+                    {Math.round((activePatients.length / 12) * 100)}%
                   </span>
                 </div>
               </div>
@@ -227,7 +234,7 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
             <div className="w-full bg-slate-100 h-2.5 rounded-full mt-6 overflow-hidden">
-              <div className="bg-primary h-full rounded-full shadow-[0_0_8px_rgba(19,91,236,0.3)] transition-all duration-1000" style={{ width: `${(activePatients.length / 18) * 100}%` }}></div>
+              <div className="bg-primary h-full rounded-full shadow-[0_0_8px_rgba(19,91,236,0.3)] transition-all duration-1000" style={{ width: `${(activePatients.length / 12) * 100}%` }}></div>
             </div>
           </div>
 
@@ -381,116 +388,147 @@ const Dashboard: React.FC = () => {
 
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
-          {filteredPatients.map((p) => (
-            <div
-              key={p.id}
-              onClick={() => navigate(`/safety/${p.id}`)}
-              className="group cursor-pointer flex flex-col bg-white rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 border border-slate-200 overflow-hidden relative transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 duration-300"
-            >
-              <div className={`h-2 w-full ${getAcuityColor(p.acuity)}`}></div>
-              <div className="p-5 flex flex-col h-full gap-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Cama</span>
-                      <h3 className="text-3xl font-black text-slate-900 leading-none">{p.bed}</h3>
+          {[5017, 5018, 5019, 5020, 5021, 5022, 5023, 5024, 5025, 5026, 5027, 5028].map((bedNum) => {
+            const p = activePatients.find(patient => patient.bed === bedNum.toString());
+            if (!p) {
+              return (
+                <div
+                  key={bedNum}
+                  onClick={() => navigate('/new-admission', { state: { bed: bedNum.toString() } })}
+                  className="group cursor-pointer flex flex-col bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200 items-center justify-center hover:border-primary/50 hover:bg-primary/[0.02] transition-all min-h-[280px]"
+                >
+                  <div className="text-center p-6">
+                    <div className="size-16 rounded-full bg-white border border-slate-200 flex items-center justify-center mx-auto mb-4 text-slate-300 group-hover:text-primary transition-colors shadow-sm">
+                      <span className="material-symbols-outlined text-3xl">add</span>
                     </div>
-                  </div>
-                  <span className={`text-[10px] font-black px-2 py-1 rounded-lg border uppercase tracking-wider ${getAcuityLabelColor(p.acuity)}`}>
-                    {p.acuity}
-                  </span>
-                </div>
-
-                <div>
-                  <p className="text-lg font-bold text-slate-800 line-clamp-1 leading-tight">{p.name}</p>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mb-2">HC: {p.hc}</p>
-                  <div className="bg-slate-50 border border-slate-100 rounded-lg p-2 mt-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Estado General</p>
-                    <p className="text-[11px] font-bold text-slate-600 line-clamp-2 leading-snug">
-                      {p.generalStatus ? p.generalStatus : '\u00A0'}
-                    </p>
-                  </div>
-
-                  {/* Scores Clínicos - Dashboard View */}
-                  <div className="grid grid-cols-3 gap-1.5 mt-2">
-                    <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-1.5 flex flex-col items-center">
-                        <span className="text-[8px] font-black text-indigo-400 uppercase tracking-tighter">APA II</span>
-                        <span className={`text-sm font-black ${p.apache_score && p.apache_score > 15 ? 'text-red-600' : 'text-indigo-700'}`}>
-                            {p.apache_score !== null && p.apache_score !== undefined ? p.apache_score : '--'}
-                        </span>
-                    </div>
-                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-1.5 flex flex-col items-center">
-                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">SOFA</span>
-                        <span className="text-sm font-black text-slate-800">
-                            {p.sofa_score !== null && p.sofa_score !== undefined ? p.sofa_score : '--'}
-                        </span>
-                    </div>
-                    <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-1.5 flex flex-col items-center">
-                        <span className="text-[8px] font-black text-emerald-500 uppercase tracking-tighter">CHARL</span>
-                        <span className="text-sm font-black text-emerald-700">
-                            {p.charlson_score !== null && p.charlson_score !== undefined ? p.charlson_score : '--'}
-                        </span>
-                    </div>
-
-                  </div>
-
-                  <div className="flex items-center gap-2 mt-2">
-                    {p.lastClinicalUpdate ? (
-                      <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                        <span className="material-symbols-outlined text-xs">update</span>
-                        Evolución: {new Date(p.lastClinicalUpdate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-                        <span className="material-symbols-outlined text-xs">history_edu</span>
-                        Sin evolución
-                      </div>
-                    )}
+                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">Cama {bedNum}</h3>
+                    <p className="text-xs text-slate-400 mt-1">Disponible</p>
                   </div>
                 </div>
-
-                <div className="space-y-2 mt-1">
-                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider">
-                    <span className="text-slate-400">Entrega Turno</span>
-                    <span className={p.isbarStatus < 5 ? 'text-red-500' : 'text-emerald-500'}>
-                      {p.isbarStatus}/5
+              );
+            }
+            return (
+              <div
+                key={p.id}
+                onClick={() => navigate(`/safety/${p.id}`)}
+                className="group cursor-pointer flex flex-col bg-white rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 border border-slate-200 overflow-hidden relative transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 duration-300"
+              >
+                <div className={`h-2 w-full ${getAcuityColor(p.acuity)}`}></div>
+                <div className="p-5 flex flex-col h-full gap-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Cama</span>
+                        <h3 className="text-3xl font-black text-slate-900 leading-none">{p.bed}</h3>
+                      </div>
+                    </div>
+                    <span className={`text-[10px] font-black px-2 py-1 rounded-lg border uppercase tracking-wider ${getAcuityLabelColor(p.acuity)}`}>
+                      {p.acuity}
                     </span>
                   </div>
-                  <div className="flex gap-1.5 h-1.5">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <div key={s} className={`flex-1 rounded-full transition-all duration-500 ${p.isbarStatus >= s ? 'bg-primary shadow-[0_0_5px_rgba(19,91,236,0.2)]' : 'bg-slate-100'}`}></div>
-                    ))}
-                  </div>
-                </div>
 
-                <div className="mt-auto pt-4 border-t border-slate-50 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="size-7 rounded-full bg-slate-100 border border-slate-200 p-0.5">
-                      <img src={p.nurseAvatar} alt={p.nurse} className="size-full rounded-full object-cover" />
+                  <div>
+                    <p className="text-lg font-bold text-slate-800 line-clamp-1 leading-tight">{p.name}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mb-2">HC: {p.hc}</p>
+                    
+                    {p.ucin_transfer_date && (() => {
+                        const start = new Date(p.ucin_transfer_date);
+                        const end = p.status === 'active' ? new Date() : new Date(p.discharge_date || new Date());
+                        const diff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+                        return (
+                            <p className="text-[10px] text-indigo-600 font-bold mb-2 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-xs">timer</span>
+                                Estancia: {diff} {diff === 1 ? 'día' : 'días'}
+                            </p>
+                        );
+                    })()}
+
+                    <div className="bg-slate-50 border border-slate-100 rounded-lg p-2 mt-1">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Estado General</p>
+                      <p className="text-[11px] font-bold text-slate-600 line-clamp-2 leading-snug">
+                        {p.generalStatus || 'Sin estado reportado'}
+                      </p>
                     </div>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">{p.nurse}</span>
+
+                    {/* Scores Clínicos - Dashboard View */}
+                    <div className="grid grid-cols-3 gap-1.5 mt-2">
+                      <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-1.5 flex flex-col items-center">
+                        <span className="text-[8px] font-black text-indigo-400 uppercase tracking-tighter">APA II</span>
+                        <span className={`text-sm font-black ${p.apache_score && p.apache_score > 15 ? 'text-red-600' : 'text-indigo-700'}`}>
+                          {p.apache_score !== null && p.apache_score !== undefined ? p.apache_score : '--'}
+                        </span>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-1.5 flex flex-col items-center">
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">SOFA</span>
+                        <span className="text-sm font-black text-slate-800">
+                          {p.sofa_score !== null && p.sofa_score !== undefined ? p.sofa_score : '--'}
+                        </span>
+                      </div>
+                      <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-1.5 flex flex-col items-center">
+                        <span className="text-[8px] font-black text-emerald-500 uppercase tracking-tighter">CHARL</span>
+                        <span className="text-sm font-black text-emerald-700">
+                          {p.charlson_score !== null && p.charlson_score !== undefined ? p.charlson_score : '--'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="size-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-primary group-hover:text-white transition-colors">
-                    <span className="material-symbols-outlined text-lg">open_in_new</span>
+
+                  <div className="space-y-2 mt-1">
+                    <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider">
+                      <span className="text-slate-400">Entrega Turno</span>
+                      <span className={(p.isbarStatus || 0) < 5 ? 'text-red-500' : 'text-emerald-500'}>
+                        {p.isbarStatus || 0}/5
+                      </span>
+                    </div>
+                    <div className="flex gap-1.5 h-1.5">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <div key={s} className={`flex-1 rounded-full transition-all duration-500 ${(p.isbarStatus || 0) >= s ? 'bg-primary shadow-[0_0_5px_rgba(19,91,236,0.2)]' : 'bg-slate-100'}`}></div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-auto pt-4 border-t border-slate-50 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="size-7 rounded-full bg-slate-100 border border-slate-200 p-0.5">
+                        <img src={p.nurseAvatar} alt={p.nurse} className="size-full rounded-full object-cover" />
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">{p.nurse}</span>
+                    </div>
+                    <div className="size-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-primary group-hover:text-white transition-colors">
+                      <span className="material-symbols-outlined text-lg">open_in_new</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
+        </div>
 
-          {/* Botón de Nueva Admisión */}
-          <div
-            onClick={() => navigate('/new-admission')}
-            className="group cursor-pointer flex flex-col bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200 items-center justify-center hover:border-primary/50 hover:bg-primary/[0.02] transition-all min-h-[280px]"
-          >
-            <div className="text-center p-6">
-              <div className="size-16 rounded-full bg-white border border-slate-200 flex items-center justify-center mx-auto mb-4 text-slate-300 group-hover:text-primary transition-colors shadow-sm">
-                <span className="material-symbols-outlined text-3xl">add</span>
-              </div>
-              <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">Nueva Admisión</h3>
-              <p className="text-xs text-slate-400 mt-1">{18 - patients.length} camas disponibles</p>
+        {/* Historial de Egresos Section (only if filter is history) */}
+        {filter === 'history' && (
+          <section className="mt-12">
+            <div className="flex items-center gap-3 mb-6">
+              <span className="px-3 py-1 bg-slate-800 text-white rounded-full text-xs font-black uppercase tracking-widest">Historial Reciente</span>
+              <div className="h-px bg-slate-200 flex-1"></div>
             </div>
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+              {filteredPatients.map(p => (
+                <div
+                  key={p.id}
+                  onClick={() => navigate(`/safety/${p.id}`)}
+                  className="bg-white rounded-2xl border border-slate-200 p-5 opacity-70 hover:opacity-100 transition-opacity"
+                >
+                  <div className="flex justify-between mb-2">
+                    <span className="text-[10px] font-black bg-slate-100 px-2 py-1 rounded">Cama {p.bed}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">{p.status}</span>
+                  </div>
+                  <p className="font-bold text-slate-800">{p.name}</p>
+                  <p className="text-[10px] text-slate-400">HC: {p.hc}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
           {/* Seed Button - Only show if empty */}
           {patients.length === 0 && !loading && (
@@ -507,7 +545,6 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
       </main>
 
 

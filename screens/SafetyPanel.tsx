@@ -22,6 +22,7 @@ const SafetyPanel: React.FC = () => {
   const [showDischargeModal, setShowDischargeModal] = useState(false);
   const [dischargeReason, setDischargeReason] = useState<'discharged' | 'deceased' | 'transferred'>('discharged');
   const [outcomeDetails, setOutcomeDetails] = useState('');
+  const [dischargeDate, setDischargeDate] = useState<string>(new Date().toLocaleString('sv-SE').replace(' ', 'T').substring(0, 16));
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState<'monitoring' | 'history' | 'evolution'>(initialTab || 'monitoring');
@@ -48,7 +49,8 @@ const SafetyPanel: React.FC = () => {
         .from('patients')
         .update({
           status: dischargeReason,
-          outcome: outcomeDetails
+          outcome: outcomeDetails,
+          discharge_date: new Date(dischargeDate).toISOString()
         })
         .eq('id', id);
 
@@ -345,6 +347,16 @@ const SafetyPanel: React.FC = () => {
                       <span className="text-sm font-bold text-slate-700">Fallecimiento</span>
                     </label>
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Fecha y Hora de Alta</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full rounded-xl border-slate-200 text-sm"
+                    value={dischargeDate}
+                    onChange={(e) => setDischargeDate(e.target.value)}
+                  />
                 </div>
 
                 <div>
