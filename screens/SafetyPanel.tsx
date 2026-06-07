@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MOCK_PATIENTS, MOCK_DEVICES } from '../constants';
 import { generateClinicalSummary } from '../services/geminiService';
+import { Device } from '../types';
 
 import { supabase } from '../services/supabase';
 import ClinicalHistory from '../components/ClinicalHistory';
@@ -24,6 +25,17 @@ const SafetyPanel: React.FC = () => {
   const [outcomeDetails, setOutcomeDetails] = useState('');
   const [dischargeDate, setDischargeDate] = useState<string>(new Date().toLocaleString('sv-SE').replace(' ', 'T').substring(0, 16));
 
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [showDeviceModal, setShowDeviceModal] = useState(false);
+  const [newDevice, setNewDevice] = useState<Partial<Device>>({
+    type: 'CVC',
+    cvc_site: 'subclavia',
+    cvc_side: 'derecho',
+    eco_guided: false,
+    inserted_date: new Date().toISOString().split('T')[0],
+    inserted_location: 'UCI'
+  });
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState<'monitoring' | 'history' | 'evolution'>(initialTab || 'monitoring');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -33,9 +45,20 @@ const SafetyPanel: React.FC = () => {
       if (!id) return;
       const { data } = await supabase.from('patients').select('*').eq('id', id).single();
       if (data) setPatient({ ...data, allergies: data.allergies || [] });
+
+      const { data: devicesData } = await supabase.from('devices').select('*').eq('patient_id', id);
+      if (devicesData) setDevices(devicesData);
     };
     fetchPatient();
   }, [id]);
+
+  const calculateDays = (dateStr?: string) => {
+    if (!dateStr) return 0;
+    const start = new Date(dateStr);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - start.getTime());
+    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  };
 
   if (!patient) return <div className="h-screen flex items-center justify-center bg-slate-50 text-slate-400 font-bold">Cargando paciente...</div>;
 
@@ -65,6 +88,34 @@ const SafetyPanel: React.FC = () => {
     }
   };
 
+  const handleAddDevice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id) return;
+    setIsProcessing(true);
+    try {
+      const { data, error } = await supabase
+        .from('devices')
+        .insert([{ ...newDevice, patient_id: id }])
+        .select();
+      if (error) throw error;
+      if (data) setDevices([...devices, data[0]]);
+      setShowDeviceModal(false);
+      setNewDevice({
+        type: 'CVC',
+        cvc_site: 'subclavia',
+        cvc_side: 'derecho',
+        eco_guided: false,
+        inserted_date: new Date().toISOString().split('T')[0],
+        inserted_location: 'UCI'
+      });
+    } catch (err: any) {
+      console.error("Error adding device:", err);
+      alert('Error al añadir dispositivo.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleGenerateSummary = async () => {
     setLoadingAi(true);
     const summary = await generateClinicalSummary(
@@ -87,31 +138,52 @@ const SafetyPanel: React.FC = () => {
             <section>
               <div className="flex justify-between items-end mb-4 px-1">
                 <h3 className="text-xl font-bold text-slate-800">Monitoreo de Dispositivos Invasivos</h3>
-                <button className="text-sm font-semibold text-primary flex items-center gap-1 bg-white border border-[#cfd7e7] px-3 py-1.5 rounded-md shadow-sm">
+                <button onClick={() => setShowDeviceModal(true)} className="text-sm font-semibold text-primary flex items-center gap-1 bg-white border border-[#cfd7e7] px-3 py-1.5 rounded-md shadow-sm">
                   <span className="material-symbols-outlined text-[18px]">add_circle</span> Añadir Dispositivo
                 </button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {MOCK_DEVICES.map((d) => (
-                  <div key={d.id} className={`bg-white rounded-lg border p-5 flex flex-col shadow-sm ${d.status === 'vencido' ? 'border-red-200 bg-red-50/20' : 'border-slate-200'}`}>
-                    <div className="flex justify-between items-start mb-3">
-                      <div className={`p-2.5 rounded-lg ${d.status === 'vencido' ? 'text-red-600 bg-red-100' : 'text-primary bg-blue-50'}`}>
-                        <span className="material-symbols-outlined">{d.status === 'vencido' ? 'warning' : 'vaccines'}</span>
+                {(devices.length > 0 ? devices : MOCK_DEVICES).map((d: any) => {
+                  const isMock = !d.patient_id;
+                  const days = isMock ? 0 : calculateDays(d.inserted_date);
+                  const isExpired = isMock ? d.status === 'vencido' : (d.type === 'CVC' && days > 10);
+                  const currentStatus = isExpired ? 'vencido' : 'activo';
+                  const displayLocation = isMock ? d.location : (d.type === 'CVC' ? `${d.cvc_site} ${d.cvc_side}` : d.location || '');
+                  const placementLocation = d.inserted_location ? `Colocado en: ${d.inserted_location}` : '';
+                  const ecoGuided = d.eco_guided ? 'Eco-guiado' : '';
+                  
+                  return (
+                    <div key={d.id} className={`bg-white rounded-lg border p-5 flex flex-col shadow-sm ${currentStatus === 'vencido' ? 'border-red-200 bg-red-50/20' : 'border-slate-200'}`}>
+                      <div className="flex justify-between items-start mb-3">
+                        <div className={`p-2.5 rounded-lg ${currentStatus === 'vencido' ? 'text-red-600 bg-red-100' : 'text-primary bg-blue-50'}`}>
+                          <span className="material-symbols-outlined">{currentStatus === 'vencido' ? 'warning' : 'vaccines'}</span>
+                        </div>
+                        <span className={`text-[10px] uppercase px-2 py-1 rounded font-bold ${currentStatus === 'vencido' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                          {currentStatus === 'vencido' ? 'Vencido' : 'Activo'}
+                        </span>
                       </div>
-                      <span className={`text-[10px] uppercase px-2 py-1 rounded font-bold ${d.status === 'vencido' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                        {d.status === 'vencido' ? 'Vencido' : d.status === 'activo' ? 'Activo' : 'Pendiente'}
-                      </span>
-                    </div>
-                    <h4 className="font-bold text-slate-900 text-lg leading-tight">{d.type}</h4>
-                    <p className="text-sm text-[#4c669a] mb-5">{d.location}</p>
-                    <div className="mt-auto pt-4 border-t border-slate-100">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-[#4c669a]">Estado del Vendaje</span>
-                        <span className={`font-bold ${d.status === 'vencido' ? 'text-red-600' : 'text-orange-600'}`}>{d.nextCheck}</span>
+                      <h4 className="font-bold text-slate-900 text-lg leading-tight">{d.type}</h4>
+                      <p className="text-sm text-[#4c669a] capitalize">{displayLocation}</p>
+                      
+                      {!isMock && d.type === 'CVC' && (
+                        <div className="mt-2 text-xs text-slate-500 space-y-1">
+                          <p><strong>Permanencia:</strong> {days} días {days > 10 && <span className="text-red-500 font-bold">(&gt;10 días)</span>}</p>
+                          <p>{placementLocation}</p>
+                          {ecoGuided && <p className="text-indigo-600 font-semibold">{ecoGuided}</p>}
+                        </div>
+                      )}
+                      
+                      <div className="mt-auto pt-4 border-t border-slate-100">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-[#4c669a]">Estado del Vendaje</span>
+                          <span className={`font-bold ${currentStatus === 'vencido' ? 'text-red-600' : 'text-orange-600'}`}>
+                            {isMock ? d.nextCheck : (currentStatus === 'vencido' ? 'Cambio Requerido' : 'Ok')}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
 
@@ -380,6 +452,91 @@ const SafetyPanel: React.FC = () => {
           </div>
         )
       }
+
+      {/* MODAL DE DISPOSITIVO */}
+      {showDeviceModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowDeviceModal(false)}></div>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <header className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="font-bold text-slate-900">Añadir Dispositivo (CVC)</h3>
+              <button onClick={() => setShowDeviceModal(false)} className="size-8 rounded-full hover:bg-slate-200 flex items-center justify-center transition-colors">
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </header>
+            <form onSubmit={handleAddDevice} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Ubicación</label>
+                <select 
+                  className="w-full rounded-xl border-slate-200 text-sm"
+                  value={newDevice.cvc_site}
+                  onChange={(e) => setNewDevice({...newDevice, cvc_site: e.target.value})}
+                >
+                  <option value="subclavia">1. Subclavia</option>
+                  <option value="supraclavicular">2. Supraclavicular</option>
+                  <option value="axilar">3. Axilar</option>
+                  <option value="yugular posterior">4. Yugular Posterior</option>
+                  <option value="yugular anterior">5. Yugular Anterior</option>
+                  <option value="femoral">6. Femoral</option>
+                </select>
+              </div>
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Lado</label>
+                  <select 
+                    className="w-full rounded-xl border-slate-200 text-sm"
+                    value={newDevice.cvc_side}
+                    onChange={(e) => setNewDevice({...newDevice, cvc_side: e.target.value})}
+                  >
+                    <option value="derecho">Derecho</option>
+                    <option value="izquierdo">Izquierdo</option>
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Lugar de Colocación</label>
+                  <select 
+                    className="w-full rounded-xl border-slate-200 text-sm"
+                    value={newDevice.inserted_location}
+                    onChange={(e) => setNewDevice({...newDevice, inserted_location: e.target.value})}
+                  >
+                    <option value="UCI">UCI</option>
+                    <option value="UCIN">UCIN</option>
+                    <option value="Externo">Externo</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  id="eco_guided" 
+                  checked={newDevice.eco_guided}
+                  onChange={(e) => setNewDevice({...newDevice, eco_guided: e.target.checked})}
+                  className="rounded border-slate-300 text-primary focus:ring-primary"
+                />
+                <label htmlFor="eco_guided" className="text-sm font-bold text-slate-700">Ejecutado con ayuda de ultrasonido (Eco-guiado)</label>
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Día de colocación</label>
+                <input
+                  type="date"
+                  className="w-full rounded-xl border-slate-200 text-sm"
+                  value={newDevice.inserted_date}
+                  onChange={(e) => setNewDevice({...newDevice, inserted_date: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button type="button" onClick={() => setShowDeviceModal(false)} className="flex-1 py-3 rounded-xl border border-slate-200 font-bold text-sm text-slate-600 hover:bg-slate-50">Cancelar</button>
+                <button type="submit" disabled={isProcessing} className="flex-1 py-3 rounded-xl bg-primary font-bold text-sm text-white hover:bg-blue-700 disabled:opacity-70">
+                  {isProcessing ? 'Guardando...' : 'Guardar CVC'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div >
   );
 };

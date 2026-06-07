@@ -38,11 +38,19 @@ export interface VitalSign {
 
 export interface Device {
   id: string;
+  patient_id?: string;
   type: string;
-  location: string;
-  inserted: string;
-  status: 'activo' | 'vencido' | 'pendiente';
-  nextCheck: string;
+  cvc_site?: string;
+  cvc_side?: string;
+  eco_guided?: boolean;
+  inserted_date?: string;
+  inserted_location?: string;
+  
+  // Legacy / computed properties
+  location?: string;
+  inserted?: string;
+  status?: 'activo' | 'vencido' | 'pendiente';
+  nextCheck?: string;
 }
 
 export interface Interconsultation {

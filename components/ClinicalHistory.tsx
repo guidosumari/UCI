@@ -477,6 +477,7 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
             const newPatient = {
                 name: patientData.name,
                 dni: patientData.dni,
+                dob: patientData.age,
                 bed: patientData.bed || '00',
                 hc: patientData.hc || 'PENDING',
                 status: 'active',
@@ -577,6 +578,7 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
                 const { error } = await supabase.from('patients').update({
                     name: patientData.name,
                     dni: patientData.dni,
+                    dob: patientData.age,
                     bed: patientData.bed,
                     hc: patientData.hc,
                     status: 'active',
@@ -712,11 +714,11 @@ const ClinicalHistory: React.FC<Props> = ({ patientId }) => {
         );
 
         createTable(
-            [[{ content: 'ENFERMEDAD ACTUAL', colSpan: 4 }]],
+            [[{ content: 'ENFERMEDAD ACTUAL', colSpan: 3 }]],
             [
-                ['T.E: ' + safe(patientData.illness_duration), 'Inicio: ' + safe(patientData.onset), {content: 'Curso: ' + safe(patientData.illness_course), colSpan: 2}],
-                [{ content: 'Síntomas y Signos: ' + safe(patientData.symptoms), colSpan: 4 }],
-                [{ content: safe(patientData.anamnesis_text), colSpan: 4, styles: { cellPadding: 5 } }]
+                ['T.E: ' + safe(patientData.illness_duration), 'Inicio: ' + safe(patientData.onset), 'Curso: ' + safe(patientData.illness_course)],
+                [{ content: 'Síntomas y Signos: ' + safe(patientData.symptoms), colSpan: 3 }],
+                [{ content: safe(patientData.anamnesis_text), colSpan: 3, styles: { cellPadding: 5 } }]
             ]
         );
 

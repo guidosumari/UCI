@@ -172,3 +172,40 @@ create policy "Authenticated users can update interconsultations"
   on public.interconsultations for update
   to authenticated
   using (true);
+
+-- Create a table for Devices (e.g. CVC)
+create table public.devices (
+  id uuid default gen_random_uuid() primary key,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  patient_id uuid references public.patients(id) not null,
+  type text not null, -- 'CVC', 'PICC', etc.
+  cvc_site text, -- 'subclavia', 'supraclavicular', 'axilar', 'yugular posterior', 'yugular anterior', 'femoral'
+  cvc_side text, -- 'derecho', 'izquierdo'
+  eco_guided boolean default false,
+  inserted_date date not null,
+  inserted_location text -- 'UCI', 'UCIN', 'Externo'
+);
+
+-- RLS for Devices
+alter table public.devices enable row level security;
+
+create policy "Authenticated users can view devices"
+  on public.devices for select
+  to authenticated
+  using (true);
+
+create policy "Authenticated users can insert devices"
+  on public.devices for insert
+  to authenticated
+  with check (true);
+
+create policy "Authenticated users can update devices"
+  on public.devices for update
+  to authenticated
+  using (true);
+
+create policy "Authenticated users can delete devices"
+  on public.devices for delete
+  to authenticated
+  using (true);
+
