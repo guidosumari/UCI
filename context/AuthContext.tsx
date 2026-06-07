@@ -7,7 +7,8 @@ interface AuthContextType {
     session: Session | null;
     user: User | null;
     loading: boolean;
-    signIn: (email: string) => Promise<{ error: any }>;
+    signIn: (email: string, password: string) => Promise<{ error: any }>;
+    signUp: (email: string, password: string, fullName?: string) => Promise<{ error: any; session: Session | null }>;
     signOut: () => Promise<{ error: any }>;
 }
 
@@ -24,7 +25,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Fail-safe timeout
         const timeoutId = setTimeout(() => {
             if (mounted && loading) {
-                console.warn("Auth check timed out, forcing loading false");
+                console.warn('Auth check timed out, forcing loading false');
                 setLoading(false);
             }
         }, 5000);
@@ -38,7 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 clearTimeout(timeoutId);
             }
         }).catch((error) => {
-            console.error("Auth session check failed:", error);
+            console.error('Auth session check failed:', error);
             if (mounted) {
                 setLoading(false);
                 clearTimeout(timeoutId);
@@ -62,26 +63,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
     }, []);
 
-    const signIn = async (email: string) => {
-        // For simplicity we use Magic Link, but can upgrade to Password if requested.
-        // Actually, standard usually expects password. Let's support password login?
-        // The prompt said "login/registro".
-        // Let's implement generic email/password for now as it's common.
-        // But wait, the context interface just said `signIn`.
-        // I'll update the interface to accept password too, or use Magic Link which is easier for setup?
-        // Let's implement generic email/password sign in.
-        return supabase.auth.signInWithOtp({ email });
+    const signIn = async (email: string, password: string) => {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        return { error };
     };
 
-    // Wait, I should probably support Sign Up too if I do Password.
-    // Magic link is easiest for "Login/Register" combined (just input email).
-    // Let's stick to Magic Link for a modern feel unless specific requirements.
-    // Actually, let's provide a full method signature just in case.
+    const signUp = async (email: string, password: string, fullName?: string) => {
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: { full_name: fullName ?? '' },
+                emailRedirectTo: undefined,
+            },
+        });
+        return { error, session: data?.session ?? null };
+    };
 
     const signOut = () => supabase.auth.signOut();
 
     return (
-        <AuthContext.Provider value={{ session, user, loading, signIn, signOut }}>
+        <AuthContext.Provider value={{ session, user, loading, signIn, signUp, signOut }}>
             {children}
         </AuthContext.Provider>
     );

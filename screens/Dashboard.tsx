@@ -1,17 +1,25 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MOCK_PATIENTS } from '../constants';
 import { Acuity, Patient, Interconsultation } from '../types';
 import { supabase } from '../services/supabase';
-import { useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [waitingList, setWaitingList] = useState<Interconsultation[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'critical' | 'history'>('all');
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    await signOut();
+    navigate('/login');
+  };
 
   const getAcuityColor = (acuity: Acuity) => {
     switch (acuity) {
@@ -167,11 +175,22 @@ const Dashboard: React.FC = () => {
                 </p>
               </div>
             </div>
-            {/* Mobile User Profile */}
-            <div className="flex lg:hidden items-center gap-3">
-              <div className="size-10 rounded-full ring-2 ring-primary/20 p-0.5 cursor-pointer">
+            {/* Mobile User Profile + Logout */}
+            <div className="flex lg:hidden items-center gap-2">
+              <div className="size-10 rounded-full ring-2 ring-primary/20 p-0.5">
                 <img src="https://picsum.photos/id/177/200/200" className="size-full rounded-full object-cover" alt="Perfil" />
               </div>
+              <button
+                onClick={handleLogout}
+                disabled={loggingOut}
+                title="Cerrar sesión"
+                className="flex items-center justify-center size-9 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all active:scale-95 disabled:opacity-50"
+              >
+                {loggingOut
+                  ? <span className="size-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin" />
+                  : <span className="material-symbols-outlined text-lg">logout</span>
+                }
+              </button>
             </div>
           </div>
 
@@ -204,12 +223,29 @@ const Dashboard: React.FC = () => {
 
           <div className="hidden lg:flex items-center gap-3 pl-4 border-l border-slate-200 ml-2 order-2 lg:order-none">
             <div className="text-right hidden sm:block">
-              <p className="text-sm font-bold text-slate-900">Dra. Sarah C.</p>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Residente Jefe</p>
+              <p className="text-sm font-bold text-slate-900">
+                {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuario'}
+              </p>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">
+                {user?.email || 'Sin correo'}
+              </p>
             </div>
-            <div className="size-10 rounded-full ring-2 ring-primary/20 p-0.5 cursor-pointer">
+            <div className="size-10 rounded-full ring-2 ring-primary/20 p-0.5">
               <img src="https://picsum.photos/id/177/200/200" className="size-full rounded-full object-cover" alt="Perfil" />
             </div>
+            <button
+              id="logout-btn"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white font-bold text-sm transition-all active:scale-95 disabled:opacity-50 border border-red-100 hover:border-red-500"
+            >
+              {loggingOut ? (
+                <span className="size-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin" />
+              ) : (
+                <span className="material-symbols-outlined text-lg">logout</span>
+              )}
+              {loggingOut ? 'Saliendo...' : 'Salir'}
+            </button>
           </div>
         </div>
       </header>
